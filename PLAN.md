@@ -19,8 +19,8 @@ requirements; it is not an independent grant of permission to change live config
 - Immediate release/name reservation authorized by the user's direct request.
 - Real config writes, classification decisions, and pilot repo choice remain
   explicit review gates. No real agent config changed during development.
-- PyPI account has verified email/2FA; approved pending trusted publisher added.
-  TestPyPI setup or permission to skip the rehearsal is pending.
+- PyPI and TestPyPI accounts have verified email/2FA and approved GitHub trusted
+  publishers. Version 0.0.1 is published and installation-tested on both registries.
 - No crates.io publication requested.
 
 ## Delivery sequence
@@ -29,7 +29,7 @@ requirements; it is not an independent grant of permission to change live config
 |---|---|---|
 | 0 Preflight | Tool/auth checks; missing requirements recorded | Complete |
 | 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
-| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Repos created; local checks pass; npm 0.0.1 published; all four CI jobs green; PyPI upload pending |
+| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Complete; npm, TestPyPI, and PyPI 0.0.1 verified; all four CI jobs green |
 | 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
@@ -76,6 +76,9 @@ treat that as a potential naming claim, not verified registry ownership.
 Public tool repo and private warehouse created and pushed. v0.0.1 tags the tested
 release candidate. GitHub CI passes on Linux and Windows for Python 3.11 and 3.14.
 npm kitctl@0.0.1 is published under connorbritain (the initial registry processing
-placeholder also remains as 0.0.0-stage). PyPI trusted publishing is configured;
-the name is not reserved until the first successful upload. No real agent config
-has been modified; the warehouse is still an empty scaffold.
+placeholder also remains as 0.0.0-stage). PyPI and TestPyPI kitctl@0.0.1 are
+published through GitHub trusted publishing. Both Python distributions have identical
+SHA-256 hashes across TestPyPI and PyPI. Fresh installations from npm, TestPyPI,
+and PyPI pass --version and read-only inventory smoke tests in temporary sandboxes.
+Both package namespaces are now held. No real agent config has been modified;
+the warehouse is still an empty scaffold.

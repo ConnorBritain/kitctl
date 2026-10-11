@@ -1,5 +1,23 @@
 # Publishing 0.0.1
 
+## Verified release record — 2026-10-11
+
+- [npm kitctl 0.0.1](https://www.npmjs.com/package/kitctl/v/0.0.1) is published
+  under connorbritain; registry integrity matches the locally tested tarball.
+- [TestPyPI kitctl 0.0.1](https://test.pypi.org/project/kitctl/0.0.1/) was published
+  by [the rehearsal workflow](https://github.com/ConnorBritain/kitctl/actions/runs/38142749776).
+- [PyPI kitctl 0.0.1](https://pypi.org/project/kitctl/0.0.1/) was published
+  by [the production workflow](https://github.com/ConnorBritain/kitctl/actions/runs/38142825980).
+- Both Python releases use tag v0.0.1, commit e1a0dde219043badf11d9208ee0bde895329a076.
+  Wheel and source archive SHA-256 hashes match exactly across the two indexes.
+- Fresh installs from all three registries passed --version and read-only inventory
+  against temporary repositories, with isolated HOME and agent config directories.
+- GitHub trusted publishers are active on both Python indexes; no local upload token
+  was created. Namespace reservation on npm and PyPI is complete.
+
+The remaining sections document the setup and release procedure. Do not rerun
+an upload of an already published version.
+
 The user's request authorizes immediate package name reservation through a useful
 first release. Do not call a namespace held until registry metadata verifies the
 version and owner. Empty packages are prohibited by
