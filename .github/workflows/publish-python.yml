@@ -1,0 +1,42 @@
+name: Publish Python
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Registry (TestPyPI must succeed before PyPI)
+        required: true
+        type: choice
+        options: [testpypi, pypi]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+      - run: uv run python scripts/check_secrets.py
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.target == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}

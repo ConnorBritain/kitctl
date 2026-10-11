@@ -1,0 +1,69 @@
+# Publishing 0.0.1
+
+The user's request authorizes immediate package name reservation through a useful
+first release. Do not call a namespace held until registry metadata verifies the
+version and owner. Empty packages are prohibited by
+[PyPI name-retention policy](https://docs.pypi.org/project-management/name-retention/).
+
+## Account setup
+
+PyPI needs an account, verified email, and 2FA. TestPyPI is a separate service with
+its own account. Sign in or register:
+
+- https://pypi.org/account/register/
+- https://test.pypi.org/account/register/
+
+Prefer [pending trusted publishers](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+for the first release, so no long-lived token has to be shared. On **each** registry,
+open Publishing, add a pending GitHub publisher with:
+
+| Field | Value |
+|---|---|
+| PyPI project name | kitctl |
+| Owner | ConnorBritain |
+| Repository | kitctl |
+| Workflow filename | publish-python.yml |
+| Environment | testpypi on TestPyPI; pypi on PyPI |
+
+A pending publisher alone does not reserve the project name. A successful first
+upload creates it. GitHub environments with those names should exist. The workflow
+supports explicit dispatch only and uses OIDC in the publishing job. Run it from
+the reviewed release tag, target TestPyPI first, install/test that result, then
+dispatch the same tag for PyPI. The workflow does not automatically enforce the
+cross-registry ordering; the release operator must verify TestPyPI success.
+
+```sh
+gh workflow run publish-python.yml --ref v0.0.1 -f target=testpypi
+# After successful TestPyPI publication:
+uvx --index https://test.pypi.org/simple/ --from kitctl==0.0.1 kitctl --version
+# Then publish the same reviewed tag to production:
+gh workflow run publish-python.yml --ref v0.0.1 -f target=pypi
+uvx --from kitctl==0.0.1 kitctl --version
+```
+
+## npm
+
+Build and verify the exact tarball:
+
+```sh
+uv sync --locked
+uv run pytest
+uv build
+uv run python scripts/prepare_npm.py
+npm --prefix npm test
+cd npm
+npm pack --dry-run
+npm pack
+npm publish kitctl-0.0.1.tgz --access public
+npm view kitctl@0.0.1 version maintainers dist.integrity
+```
+
+Publishing requires [2FA or an eligible granular token](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/).
+An authenticated `npm whoami` does not prove publish authorization. Let the account
+owner complete interactive authentication if required; don't copy tokens into the
+repository. The package includes only the launcher, wheel, README, and MIT license.
+No real inventory, warehouse content, or agent config belongs in either package.
+
+Both ecosystems publish public artifacts even if the source repository is private.
+For private source, use manual Python uploads or validate current registry support
+for that repository's trusted publishing before dispatch.

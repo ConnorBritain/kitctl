@@ -1,0 +1,70 @@
+# Kit implementation plan
+
+Created 2026-10-11 from the supplied bootstrap brief and the user's request to
+plan, build, use MIT, and reserve namespaces promptly. The brief supplies product
+requirements; it is not an independent grant of permission to change live config.
+
+## Decisions and boundaries
+
+- Python 3.11+, uv, argparse, zero runtime dependencies in 0.0.1.
+- Add tomlkit and ruamel.yaml when structured config editing begins; don't write
+  generators before validating their target schemas and installed capabilities.
+- Binary/package: kitctl; document pre-existing AWS and Gravwell binary collisions.
+  Kept the requested name; alternate-name question has no response yet.
+- MIT, copyright Connor England (authenticated GitHub identity).
+- Tool repository: ConnorBritain/kitctl; created private to reserve the name; visibility preference pending.
+- Warehouse: ConnorBritain/agent-kits, created private at ~/agent-kits (empty scaffold only).
+- Proposed inventory parents: ~/Code; pending user response.
+- Immediate release/name reservation authorized by the user's direct request.
+- Real config writes, classification decisions, and pilot repo choice remain
+  explicit review gates. No real agent config changed during development.
+- TestPyPI and PyPI accounts/trusted publishers still need account-owner setup.
+- No crates.io publication requested.
+
+## Delivery sequence
+
+| Phase | Deliverable and acceptance | Status |
+|---|---|---|
+| 0 Preflight | Tool/auth checks; missing requirements recorded | Complete |
+| 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
+| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Repos created; local checks pass; registry publishing pending |
+| 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
+| 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
+| 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
+| 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
+| 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
+| 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |
+| 9 Removal | Purge restores baseline; eject preserves effective config with zero Kit dependencies | Ledger/removal tests must precede first real apply |
+
+Implement and prove the ledger, conflicts, interrupted-write recovery, purge, and
+eject in the sandbox before any real apply, rather than leaving those proofs until
+after migration. Native hooks are guardrails with capability gaps, not a security
+boundary; don't promise complete command interception.
+
+## Preflight evidence (2026-10-11)
+
+macOS arm64, bash. Git 2.42.0; gh 2.87.2; Python 3.14.6 (also 3.11/3.12/3.13
+installed); uv 0.11.2; Node 26.8.1; npm 11.19.0; Claude Code 2.1.86; Codex CLI
+0.153.4. `python` is absent, but `python3` and uv environments work. No tool
+installation is required. gh user ConnorBritain; npm user connorbritain. No local
+PyPI token or ~/.pypirc detected; no GitHub OIDC context locally (expected).
+
+| Namespace | Observed result |
+|---|---|
+| npm kitctl, kit-ctl, kit_ctl | All registry endpoints returned HTTP 404 |
+| PyPI kitctl | JSON endpoint returned HTTP 404 |
+| crates.io kitctl | API returned HTTP 404 with a User-Agent |
+| ConnorBritain/kitctl | Authenticated API returned HTTP 404 |
+| ConnorBritain/agent-kits | Authenticated API returned HTTP 404 |
+| Existing exact-name GitHub repositories | `gh search repos kitctl` returned none |
+| Local PATH | No kitctl executable found |
+
+404 means no currently visible package; registries can still reject reserved or
+historically blocked names. Only a verified publish establishes ownership.
+Availability is a point-in-time observation, not a reservation.
+
+Existing tooling: [AWS](https://github.com/awslabs/eks-perf-tests) (formerly
+kubernetes-iteration-toolkit), [Gravwell](https://docs.gravwell.io/v5.8.8/changelog/4.2.0.html),
+and [Zwin Kit](https://github.com/Zwin-ux/kit) (adjacent agent product, ships `kit`).
+Zwin's npm README advertises a kitctl crate even though the crate API returned 404;
+treat that as a potential naming claim, not verified registry ownership.
