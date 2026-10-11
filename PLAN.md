@@ -19,7 +19,8 @@ requirements; it is not an independent grant of permission to change live config
 - Immediate release/name reservation authorized by the user's direct request.
 - Real config writes, classification decisions, and pilot repo choice remain
   explicit review gates. No real agent config changed during development.
-- TestPyPI and PyPI accounts/trusted publishers still need account-owner setup.
+- PyPI account has verified email/2FA; approved pending trusted publisher added.
+  TestPyPI setup or permission to skip the rehearsal is pending.
 - No crates.io publication requested.
 
 ## Delivery sequence
@@ -28,7 +29,7 @@ requirements; it is not an independent grant of permission to change live config
 |---|---|---|
 | 0 Preflight | Tool/auth checks; missing requirements recorded | Complete |
 | 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
-| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Repos created; local checks pass; npm publish awaiting browser authentication; PyPI account setup in progress |
+| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Repos created; local checks pass; npm 0.0.1 published; all four CI jobs green; PyPI upload pending |
 | 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
@@ -69,3 +70,12 @@ kubernetes-iteration-toolkit), [Gravwell](https://docs.gravwell.io/v5.8.8/change
 and [Zwin Kit](https://github.com/Zwin-ux/kit) (adjacent agent product, ships `kit`).
 Zwin's npm README advertises a kitctl crate even though the crate API returned 404;
 treat that as a potential naming claim, not verified registry ownership.
+
+## Bootstrap outcome
+
+Public tool repo and private warehouse created and pushed. v0.0.1 tags the tested
+release candidate. GitHub CI passes on Linux and Windows for Python 3.11 and 3.14.
+npm kitctl@0.0.1 is published under connorbritain (the initial registry processing
+placeholder also remains as 0.0.0-stage). PyPI trusted publishing is configured;
+the name is not reserved until the first successful upload. No real agent config
+has been modified; the warehouse is still an empty scaffold.
