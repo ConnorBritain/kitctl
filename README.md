@@ -3,6 +3,8 @@
 Kit inventories the skills, MCP configuration, hooks, and plugins used by coding
 agents. The planned compiler manages named **loadouts** from a separate private
 warehouse and writes each harness's native configuration with an ownership ledger.
+The planned default warehouse location is `~/kits`; setup will ask which parent
+directories contain your repositories.
 
 **0.0.1 is an early, read-only release.** It discovers skill folders and known
 configuration files in explicitly selected roots, computes SHA-256 hashes, and

@@ -11,6 +11,10 @@ declares repo intent. `kit.lock` records the exact resolved warehouse commit,
 schema/compiler versions, and all Kit-owned effects. The agent proposes; a
 deterministic compiler plans, previews, and commits changes.
 
+Default warehouse location is ~/kits; the private GitHub repository can remain
+agent-kits. Initial setup asks where repositories live and stores the chosen parent
+directories locally; do not hardcode ~/Code as a product default.
+
 Warehouse layout: primitives/{skills,mcp,hooks,plugins}, loadouts/, inbox/,
 attic/, marketplace/. Nothing is retired by deleting warehouse content.
 

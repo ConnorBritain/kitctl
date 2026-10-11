@@ -10,11 +10,12 @@ requirements; it is not an independent grant of permission to change live config
 - Add tomlkit and ruamel.yaml when structured config editing begins; don't write
   generators before validating their target schemas and installed capabilities.
 - Binary/package: kitctl; document pre-existing AWS and Gravwell binary collisions.
-  Kept the requested name; alternate-name question has no response yet.
+  User confirmed keeping kitctl despite the collision.
 - MIT, copyright Connor England (authenticated GitHub identity).
-- Tool repository: ConnorBritain/kitctl; created private to reserve the name; visibility preference pending.
-- Warehouse: ConnorBritain/agent-kits, created private at ~/agent-kits (empty scaffold only).
-- Proposed inventory parents: ~/Code; pending user response.
+- Tool repository: ConnorBritain/kitctl; public, as confirmed by the user.
+- Warehouse: ConnorBritain/agent-kits, private, cloned at ~/kits (empty scaffold only).
+- Warehouse default: ~/kits. Initial setup must ask for repository parent directories;
+  there is no universal repo-root default. This user confirmed ~/Code.
 - Immediate release/name reservation authorized by the user's direct request.
 - Real config writes, classification decisions, and pilot repo choice remain
   explicit review gates. No real agent config changed during development.
@@ -27,7 +28,7 @@ requirements; it is not an independent grant of permission to change live config
 |---|---|---|
 | 0 Preflight | Tool/auth checks; missing requirements recorded | Complete |
 | 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
-| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Repos created; local checks pass; registry publishing pending |
+| 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Repos created; local checks pass; npm publish awaiting browser authentication; PyPI account setup in progress |
 | 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
