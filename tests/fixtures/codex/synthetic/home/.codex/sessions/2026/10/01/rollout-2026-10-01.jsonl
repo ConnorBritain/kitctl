@@ -1,0 +1,6 @@
+{"timestamp": "2026-10-01T08:00:00Z", "type": "session_meta", "payload": {"id": "x", "cwd": "{{REPO}}", "instructions": "{{CANARY}}"}}
+{"timestamp": "2026-10-01T08:00:01Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "{{CANARY}}"}]}}
+{"timestamp": "2026-10-01T08:00:02Z", "type": "response_item", "payload": {"type": "function_call", "name": "docs__search", "arguments": "{\"q\": \"{{CANARY}}\"}"}}
+{"timestamp": "2026-10-01T08:00:03Z", "type": "event_msg", "payload": {"type": "mcp_tool_call_begin", "invocation": {"server": "remote", "tool": "get", "arguments": {"k": "{{CANARY}}"}}}}
+{"timestamp": "2026-10-01T08:00:04Z", "type": "response_item", "payload": {"type": "function_call", "name": "shell", "arguments": "{{CANARY}}"}}
+{"timestamp": "2026-10-01T08:00:05Z", "type": "future_record_kind", "payload": {}}

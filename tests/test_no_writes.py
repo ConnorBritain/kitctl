@@ -26,6 +26,12 @@ COMMANDS = [
     ["inventory"],
     ["inventory", "--json"],
     ["inventory", "--no-cache"],
+    ["usage"],
+    ["usage", "--json", "--since", "2026-01-01"],
+    ["report", "--format", "html"],
+    ["report", "--format", "json"],
+    ["doctor"],
+    ["validate"],
 ]
 
 

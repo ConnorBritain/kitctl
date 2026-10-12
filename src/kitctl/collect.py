@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import Any
 from kitctl.hashing import HASH_SCHEME, HashCache, tree_digest
 from kitctl.model import Entry, Finding
 from kitctl.safemeta import frontmatter
-from kitctl.scan import Link, iter_dir, traverse, walk_tree, within
+from kitctl.scan import Link, is_junction, iter_dir, traverse, walk_tree, within
 
 
 class Collector:
@@ -110,9 +111,9 @@ class Collector:
 
     # -- reading -----------------------------------------------------------
 
-    def digest(self, path: Path) -> str | None:
+    def digest(self, path: Path, stat: os.stat_result | None = None) -> str | None:
         try:
-            return self.cache.digest(path) if self.cache.location else _plain_digest(path)
+            return self.cache.digest(path, stat) if self.cache.location else _plain_digest(path)
         except OSError as error:
             self.finding("error", "unreadable", path, f"Cannot read: {error.strerror}")
             return None
@@ -202,19 +203,25 @@ class Collector:
         pairs: list[tuple[str, str]] = []
         size = 0
         for item in tree.files:
-            digest = self.digest(item.path)
+            try:
+                info = item.stat or item.path.stat()
+            except OSError as error:
+                self.finding("error", "unreadable", item.path, f"Cannot read: {error.strerror}")
+                return None
+            digest = self.digest(item.path, info)
             if digest is None:
                 return None
             pairs.append((item.relative, digest))
-            try:
-                size += item.path.stat().st_size
-            except OSError:
-                pass
+            size += info.st_size
         pairs += [(name, "external-link") for name in tree.external]
         for inner in tree.links:
             self.link(inner, directory, harness, scope, repo)
-        text = self.read_text(directory / "SKILL.md", limit=64 << 10) or ""
-        front = frontmatter(text)
+        manifest_digest = dict(pairs).get("SKILL.md", "")
+        front = self.cache.memo.get(manifest_digest)
+        if front is None:
+            front = frontmatter(self.read_text(directory / "SKILL.md", limit=64 << 10) or "")
+            if manifest_digest:
+                self.cache.remember(manifest_digest, front)
         meta: dict[str, Any] = {
             "frontmatter_name": front.get("name"),
             "description": front.get("description"),
@@ -251,8 +258,13 @@ class Collector:
     ) -> Iterator[Path]:
         """Record each ``<name>/SKILL.md`` skill; yield child dirs that are not skills."""
         for child in self.children(directory):
-            path, link = self.child(directory, child.name, harness, scope, repo)
-            if path is None or not path.is_dir():
+            if child.is_symlink() or is_junction(child):
+                path, link = self.child(directory, child.name, harness, scope, repo)
+                if path is None or not path.is_dir():
+                    continue
+            elif child.is_dir():
+                path, link = child, None
+            else:
                 continue
             if self.skill_entry(harness, scope, path, link, repo, provided_by, extra) is None:
                 yield path

@@ -1,0 +1,33 @@
+{
+  "size": {
+    "repos": 50,
+    "skills": 30,
+    "transcript_mb": 200
+  },
+  "results": {
+    "version": {
+      "ms": 38.1,
+      "peak_rss_mb": 13
+    },
+    "inventory_cold": {
+      "ms": 583.1,
+      "peak_rss_mb": 25
+    },
+    "inventory_warm": {
+      "ms": 386.2,
+      "peak_rss_mb": 25
+    },
+    "usage_cold": {
+      "ms": 668.9,
+      "peak_rss_mb": 22
+    },
+    "usage_warm": {
+      "ms": 192.3,
+      "peak_rss_mb": 22
+    },
+    "report_warm": {
+      "ms": 676.8,
+      "peak_rss_mb": 26
+    }
+  }
+}

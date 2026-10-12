@@ -20,6 +20,10 @@ uv tool install kitctl          # or: pipx install kitctl
 kitctl init                     # asks for repo parent dirs (e.g. ~/Code) and ~/kits
 kitctl inventory                # user + managed config, plugins, and every discovered repo
 kitctl inventory --root ~/Code/app --json
+kitctl usage                    # skill/agent/command/MCP calls mined from session logs
+kitctl report --format html     # inventory x repo matrix, usage, findings (md|json|html)
+kitctl doctor                   # harness versions, paths, trust, hook latency risks
+kitctl validate                 # warehouse loadouts and primitives (~/kits)
 ```
 
 From a checkout: `uv run kitctl ...`. Node 20+ with uv: `npx kitctl ...` (a thin launcher
@@ -43,6 +47,25 @@ only into scanned repos, harness config dirs, or the warehouse. Hashes use schem
 which ignores line endings and junk files. The JSON report follows
 [docs/report.schema.json](docs/report.schema.json). A stat-keyed hash cache lives in
 kitctl's cache dir (`--no-cache` to skip).
+
+`usage` streams Claude Code transcripts (`$CLAUDE_CONFIG_DIR/projects/**/*.jsonl`) and,
+best effort, Codex session logs (`$CODEX_HOME/sessions`), keeping only identities (skill,
+subagent, slash command, MCP server and tool names), timestamps, and working directories
+for repo attribution. Prompts, outputs, and tool arguments are never stored or printed.
+A per-file byte offset makes repeat runs read only new lines.
+
+`report` writes to kitctl's cache dir (`~/.cache/kitctl/reports`, `~/Library/Caches/kitctl/reports`,
+or `%LOCALAPPDATA%\kitctl\Cache\reports`) and refuses `--out` inside a scanned repo unless
+`--force`. It shows each item with its locations and hashes, call counts and last use
+(active, stale after `stale_days`, or unused), and analysis: identical copies, drift (same
+name, different content), shadowing (same name at several scopes, with the winning scope),
+MCP servers sharing a command or host, and health findings such as enabled-but-missing
+plugins, MCP commands not on PATH, and skills without frontmatter.
+
+Hooks must call an installed `kitctl` (`uv tool install kitctl` or `pipx install kitctl`),
+never `npx kitctl`: the Node → uv → Python chain cannot meet a session-start budget.
+`kitctl doctor` and `report` flag hooks that call `npx kitctl`.
+See [performance](docs/performance.md) for measured timings.
 
 Exit codes: 0 success (informational findings allowed), 1 completed with error
 findings (such as unreadable or invalid config), 2 invalid arguments or environment.

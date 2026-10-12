@@ -18,7 +18,9 @@ from kitctl.hashing import is_junk
 _REPARSE_POINT = 0x400
 
 
-def is_junction(path: Path) -> bool:
+def is_junction(path: Path | str) -> bool:
+    if os.name != "nt":
+        return False  # junctions exist only on Windows
     if sys.version_info >= (3, 12):
         return os.path.isjunction(path)
     if os.name != "nt":
@@ -94,6 +96,7 @@ def traverse(root: Path, relative: str, allowed: Iterable[Path]) -> Traversal:
 class TreeFile:
     relative: str
     path: Path
+    stat: os.stat_result | None = None
 
 
 @dataclass
@@ -105,22 +108,32 @@ class Tree:
 
 
 def walk_tree(directory: Path, allowed: Iterable[Path], max_depth: int = 32) -> Tree:
-    """Collect non-junk files under ``directory``, following only readable links, cycle-safe."""
+    """Collect non-junk files under ``directory``, following only readable links, cycle-safe.
+
+    Only links can create cycles, so only directories reached through a link are resolved.
+    """
     allowed = tuple(allowed)
     tree = Tree()
-    visited = {os.path.realpath(directory)}
+    visited: set[str] = set()
+    windows = os.name == "nt"
 
-    def visit(current: Path, prefix: str, depth: int) -> None:
+    def visit(current: str, prefix: str, depth: int, via_link: bool) -> None:
         if depth > max_depth:
             return
+        if via_link:
+            if not visited:  # resolve the root lazily: only links can lead back to it
+                visited.add(os.path.realpath(directory))
+            real = os.path.realpath(current)
+            if real in visited:
+                return
+            visited.add(real)
         with os.scandir(current) as entries:
             children = sorted(entries, key=lambda entry: entry.name)
         for entry in children:
-            path = Path(entry.path)
             relative = f"{prefix}{entry.name}"
-            linked = entry.is_symlink() or is_junction(path)
+            linked = entry.is_symlink() or (windows and is_junction(entry.path))
             if linked:
-                link = inspect_link(path, allowed)
+                link = inspect_link(Path(entry.path), allowed)
                 tree.links.append(link)
                 if not link.readable:
                     tree.external.append(relative)
@@ -131,15 +144,13 @@ def walk_tree(directory: Path, allowed: Iterable[Path], max_depth: int = 32) -> 
             if is_junk(entry.name, is_dir):
                 continue
             if is_dir:
-                real = os.path.realpath(path)
-                if real in visited:
-                    continue
-                visited.add(real)
-                visit(path, f"{relative}/", depth + 1)
-            elif linked or entry.is_file(follow_symlinks=False):
-                tree.files.append(TreeFile(relative, path))
+                visit(entry.path, f"{relative}/", depth + 1, via_link or linked)
+            elif linked:
+                tree.files.append(TreeFile(relative, Path(entry.path)))
+            elif entry.is_file(follow_symlinks=False):
+                tree.files.append(TreeFile(relative, Path(entry.path), entry.stat()))
 
-    visit(directory, "", 0)
+    visit(str(directory), "", 0, False)
     return tree
 
 

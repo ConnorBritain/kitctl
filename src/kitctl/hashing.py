@@ -87,17 +87,19 @@ class HashCache:
     def __init__(self, location: Path | None = None) -> None:
         self.location = location
         self._entries: dict[str, list[object]] = {}
+        self.memo: dict[str, dict[str, str]] = {}  # digest -> derived metadata (frontmatter)
         self._dirty = False
         if location and location.is_file():
             try:
                 data = json.loads(location.read_text("utf-8"))
                 if data.get("version") == self.VERSION and data.get("scheme") == HASH_SCHEME:
                     self._entries = data["entries"]
+                    self.memo = data.get("memo", {})
             except (OSError, ValueError, KeyError, TypeError):
                 self._entries = {}
 
-    def digest(self, path: Path) -> str:
-        stat = path.stat()
+    def digest(self, path: Path, stat: os.stat_result | None = None) -> str:
+        stat = stat or path.stat()
         key = [stat.st_size, stat.st_mtime_ns, getattr(stat, "st_ino", 0)]
         cached = self._entries.get(str(path))
         if cached and cached[:3] == key:
@@ -107,12 +109,24 @@ class HashCache:
         self._dirty = True
         return value
 
+    def remember(self, digest: str, value: dict[str, str]) -> None:
+        if self.memo.get(digest) != value:
+            self.memo[digest] = value
+            self._dirty = True
+
     def save(self) -> None:
         if not (self.location and self._dirty):
             return
         self.location.parent.mkdir(parents=True, exist_ok=True)
         staging = self.location.with_suffix(".tmp")
-        payload = {"version": self.VERSION, "scheme": HASH_SCHEME, "entries": self._entries}
+        live = {str(entry[3]) for entry in self._entries.values()}
+        memo = {digest: value for digest, value in self.memo.items() if digest in live}
+        payload = {
+            "version": self.VERSION,
+            "scheme": HASH_SCHEME,
+            "entries": self._entries,
+            "memo": memo,
+        }
         staging.write_text(json.dumps(payload), "utf-8")
         os.replace(staging, self.location)
         self._dirty = False

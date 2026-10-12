@@ -78,10 +78,145 @@ def _inventory(args: argparse.Namespace) -> int:
     return _exit_for(report)
 
 
+def _usage(args: argparse.Namespace) -> int:
+    from kitctl import config as kit_config
+    from kitctl import paths as kit_paths
+    from kitctl.inventory import resolve_repos
+    from kitctl.usage.run import mine
+
+    try:
+        paths = kit_paths.resolve()
+        repos, _ = resolve_repos(args.roots, kit_config.load(paths.kit_config_file))
+        result = _guard_any(mine(paths, repos, since=args.since, use_cache=not args.no_cache))
+    except (OSError, ValueError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return EXIT_OK
+    print(f"{'harness':8} {'kind':10} {'calls':>6} {'sessions':>8}  {'last used':10}  name  [repo]")
+    for record in sorted(result["records"], key=lambda r: (-r["calls"], r["name"])):
+        repo = f"  [{Path(record['repo']).name}]" if record["repo"] else ""
+        print(
+            f"{record['harness']:8} {record['kind']:10} {record['calls']:>6} "
+            f"{record['sessions']:>8}  {record['last_used'][:10]:10}  {record['name']}{repo}"
+        )
+    for adapter, stats in result["adapters"].items():
+        print(
+            f"{adapter}: {stats['files']} logs ({stats['files_read']} read, "
+            f"{stats['bytes_read']} bytes); {stats['malformed_total']} malformed, "
+            f"{stats['unknown_shape_total']} unrecognized lines skipped",
+            file=sys.stderr,
+        )
+    return EXIT_OK
+
+
+def _guard_any(value: dict[str, Any]) -> dict[str, Any]:
+    from kitctl.secretscan import redact_obj
+
+    cleaned, kinds = redact_obj(value)
+    if kinds:
+        print(f"warning: redacted likely secrets from output ({', '.join(kinds)})", file=sys.stderr)
+    result: dict[str, Any] = cleaned
+    return result
+
+
+def _report(args: argparse.Namespace) -> int:
+    from kitctl import report as kit_report
+    from kitctl.config import ConfigError
+    from kitctl.secretscan import redact
+
+    try:
+        built = _guard(kit_report.build(args.roots, since=args.since, use_cache=not args.no_cache))
+    except (OSError, ValueError, ConfigError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    target = kit_report.default_path(args.format)
+    if args.out:
+        out = args.out.expanduser().resolve()
+        inside = [repo for repo in built["roots"]["repos"] if out.is_relative_to(Path(repo))]
+        if inside and not args.force:
+            print(
+                f"kitctl: refusing to write a report inside repository {inside[0]} "
+                "(reports reveal private paths); pass --force to override.",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+        target = out / target.name
+    text, kinds = redact(kit_report.render(built, args.format))
+    if kinds:
+        print(f"warning: redacted likely secrets ({', '.join(kinds)})", file=sys.stderr)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, "utf-8")
+    print(target)
+    errors = sum(f["severity"] == "error" for f in built["findings"])
+    warnings = sum(f["severity"] == "warning" for f in built["findings"])
+    print(
+        f"{len(built['matrix'])} items, {errors} errors, {warnings} warnings. "
+        "No agent configuration was changed.",
+        file=sys.stderr,
+    )
+    return _exit_for(built)
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    from kitctl.doctor import run
+
+    result = _guard_any(run())
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        marks = {"ok": "ok  ", "info": "info", "warn": "warn", "error": "FAIL"}
+        for check in result["checks"]:
+            print(f"[{marks[check['status']]}] {check['check']}: {check['detail']}")
+    failed = any(c["status"] == "error" for c in result["checks"])
+    return EXIT_FINDINGS if failed else EXIT_OK
+
+
+def _validate(args: argparse.Namespace) -> int:
+    from kitctl import config as kit_config
+    from kitctl import paths as kit_paths
+    from kitctl.validate import validate
+
+    paths = kit_paths.resolve()
+    warehouse = args.warehouse
+    if warehouse is None:
+        try:
+            settings = kit_config.load(paths.kit_config_file)
+        except kit_config.ConfigError as error:
+            print(f"kitctl: {error}", file=sys.stderr)
+            return EXIT_USAGE
+        warehouse = (settings.warehouse_path() if settings else None) or paths.default_warehouse
+    try:
+        result = validate(warehouse.expanduser())
+    except FileNotFoundError as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        for finding in result["findings"]:
+            print(f"{finding['severity']}: {finding['message']} [{finding['path']}]")
+        print(
+            f"{result['primitives']} primitives, {result['loadouts']} loadouts, "
+            f"{len(result['findings'])} problems in {result['warehouse']}"
+        )
+    return _exit_for(result)
+
+
 def _init(args: argparse.Namespace) -> int:
     from kitctl.init import run_init
 
     return run_init(args)
+
+
+def _date(value: str) -> str:
+    from datetime import date
+
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"expected YYYY-MM-DD, got {value!r}") from error
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,6 +254,38 @@ def main(argv: list[str] | None = None) -> int:
     scan.add_argument("--json", action="store_true", help="Print the report as JSON.")
     scan.add_argument("--no-cache", action="store_true", help="Don't use the hash cache.")
     scan.set_defaults(handler=_inventory)
+
+    usage = commands.add_parser("usage", help="Mine session logs for skill/agent/MCP usage.")
+    usage.add_argument(
+        "--root",
+        action="append",
+        type=Path,
+        dest="roots",
+        metavar="PATH",
+        help="Repositories for attribution (default: from config).",
+    )
+    usage.add_argument("--since", type=_date, help="Only count use on or after YYYY-MM-DD.")
+    usage.add_argument("--json", action="store_true")
+    usage.add_argument("--no-cache", action="store_true", help="Re-read every log in full.")
+    usage.set_defaults(handler=_usage)
+
+    report = commands.add_parser("report", help="Write an inventory, usage, and findings report.")
+    report.add_argument("--format", choices=("md", "json", "html"), default="md")
+    report.add_argument("--out", type=Path, help="Directory (default: kitctl's report dir).")
+    report.add_argument("--force", action="store_true", help="Allow --out inside a repository.")
+    report.add_argument("--root", action="append", type=Path, dest="roots", metavar="PATH")
+    report.add_argument("--since", type=_date, help="Only count use on or after YYYY-MM-DD.")
+    report.add_argument("--no-cache", action="store_true")
+    report.set_defaults(handler=_report)
+
+    doctor = commands.add_parser("doctor", help="Check the environment and harness setup.")
+    doctor.add_argument("--json", action="store_true")
+    doctor.set_defaults(handler=_doctor)
+
+    validate = commands.add_parser("validate", help="Validate warehouse loadouts and primitives.")
+    validate.add_argument("--warehouse", type=Path, help="Warehouse path (default: config).")
+    validate.add_argument("--json", action="store_true")
+    validate.set_defaults(handler=_validate)
 
     args = parser.parse_args(argv)
     result: int = args.handler(args)

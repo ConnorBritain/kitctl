@@ -34,6 +34,7 @@ def test_claude_mcp_scopes_and_safe_metadata(harnesses: Path) -> None:
         "command": "github-mcp",
         "arg_count": 2,
         "env_names": ["GITHUB_TOKEN"],
+        "command_on_path": False,
     }
     sentry = find(report, kind="mcp_server", name="sentry")[0]
     assert sentry["metadata"]["url_host"] == "mcp.sentry.dev"

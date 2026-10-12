@@ -83,6 +83,39 @@ Phase 4 conformance will compare against `claude mcp list` (no JSON flag in 2.1.
 lists pending `.mcp.json` approvals) and `claude plugin list --json`, plus
 `codex mcp list` once its output is confirmed.
 
+## Session logs (usage mining)
+
+Claude Code 2.1.296 writes one JSONL file per session under
+`$CLAUDE_CONFIG_DIR/projects/<encoded-cwd>/` (subagent sidechains in nested folders).
+Lines carry `type` (`user`, `assistant`, `attachment`, `system`, ...), `timestamp`, `cwd`,
+`sessionId`, `version`, and `message.content[]`. kitctl reads only:
+
+| Signal | Shape | Recorded as |
+|---|---|---|
+| Skill invocation | assistant `tool_use` named `Skill`, `input.skill` | skill name |
+| Subagent | `tool_use` named `Agent` or `Task`, `input.subagent_type` | agent name |
+| MCP call | `tool_use` named `mcp__<server>__<tool>` | server (and tool) |
+| Slash command | user text containing `<command-name>/name</command-name>` | command name |
+
+Codex session logs are documented as unstable. The adapter (unverified) reads
+`$CODEX_HOME/sessions/**/*.jsonl`: `session_meta`/`turn_context` give the cwd, and
+`function_call` names (`server__tool` or `mcp__server__tool`) and `mcp_tool_call_begin`
+events give MCP use. Unknown record types are counted and reported, never fatal.
+
+## Precedence used for shadowing
+
+When one name exists at several scopes, the report names the winning scope (highest first):
+
+| Harness | Kind | Order | Source |
+|---|---|---|---|
+| Claude | skill, command | managed > user > project | code.claude.com skills page |
+| Claude | agent | managed > project > user | code.claude.com subagents page |
+| Claude | MCP server | managed > local > project > user | code.claude.com MCP scopes |
+| Codex | MCP server | managed > project > user | config layering (unverified) |
+
+Plugin-provided items are namespaced (`plugin:name`) and never shadow. Codex skills with
+the same name do not merge, so both load; settings merge key by key rather than shadow.
+
 ## Consequences for the brief
 
 The proposed Codex hook locations are documented, but activation needs explicit

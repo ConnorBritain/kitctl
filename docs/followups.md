@@ -29,7 +29,10 @@ Run `codex --version` first.
 - [ ] `AGENTS.override.md` precedence over `AGENTS.md` at each level.
 - [ ] `codex mcp list --json` exists and its output shape (needed by `kitctl conformance`).
 - [ ] Session log location and format (`$CODEX_HOME/sessions/**/*.jsonl`?) for the
-      usage adapter.
+      usage adapter: confirm `session_meta`/`turn_context` carry `cwd`, how MCP calls are
+      recorded (`function_call` names like `server__tool`, or `mcp_tool_call_begin`
+      events), and whether skill use is logged at all. Update `src/kitctl/usage/codex.py`
+      and bump `ADAPTER_VERSION`. `kitctl usage` reports how many lines it didn't recognize.
 
 ## npm publishing
 

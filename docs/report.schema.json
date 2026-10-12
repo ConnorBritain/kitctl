@@ -2,81 +2,507 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/ConnorBritain/kitctl/blob/main/docs/report.schema.json",
   "title": "kitctl inventory report",
-  "description": "Schema version 2. Reports carry paths, hashes, safe metadata, and findings; never configuration values.",
+  "description": "Schema version 2. `kitctl inventory --json` emits the required sections; `kitctl report --format json` adds usage, analysis, and matrix. Reports carry paths, hashes, safe metadata, and findings; never configuration values.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "generated_by", "hash_scheme", "adapters", "roots", "entries", "findings"],
+  "required": [
+    "schema_version",
+    "generated_by",
+    "hash_scheme",
+    "adapters",
+    "roots",
+    "entries",
+    "findings"
+  ],
   "properties": {
-    "schema_version": {"const": 2},
-    "generated_by": {"type": "string", "pattern": "^kitctl "},
-    "hash_scheme": {"const": 2},
+    "schema_version": {
+      "const": 2
+    },
+    "generated_by": {
+      "type": "string",
+      "pattern": "^kitctl "
+    },
+    "hash_scheme": {
+      "const": 2
+    },
     "adapters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claude", "codex"],
+      "required": [
+        "claude",
+        "codex"
+      ],
       "properties": {
-        "claude": {"$ref": "#/$defs/adapter"},
-        "codex": {"$ref": "#/$defs/adapter"}
+        "claude": {
+          "$ref": "#/$defs/adapter"
+        },
+        "codex": {
+          "$ref": "#/$defs/adapter"
+        }
       }
     },
     "roots": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "repos", "claude_config_dir", "codex_home"],
+      "required": [
+        "mode",
+        "repos",
+        "claude_config_dir",
+        "codex_home"
+      ],
       "properties": {
-        "mode": {"enum": ["explicit", "config", "cwd"]},
-        "repos": {"type": "array", "items": {"type": "string"}},
-        "claude_config_dir": {"type": "string"},
-        "codex_home": {"type": "string"}
+        "mode": {
+          "enum": [
+            "explicit",
+            "config",
+            "cwd"
+          ]
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "claude_config_dir": {
+          "type": "string"
+        },
+        "codex_home": {
+          "type": "string"
+        }
       }
     },
-    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
-    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "usage": {
+      "$ref": "#/$defs/usage"
+    },
+    "analysis": {
+      "$ref": "#/$defs/analysis"
+    },
+    "matrix": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/row"
+      }
+    }
   },
   "$defs": {
     "adapter": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["verified_versions"],
-      "properties": {"verified_versions": {"type": "array", "items": {"type": "string"}}}
+      "required": [
+        "verified_versions"
+      ],
+      "properties": {
+        "verified_versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "entry": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "kind", "harness", "scope", "name", "path", "content_hash", "hash_scheme",
-        "link_target", "target_in_scan", "provided_by", "repo", "metadata"
+        "kind",
+        "harness",
+        "scope",
+        "name",
+        "path",
+        "content_hash",
+        "hash_scheme",
+        "link_target",
+        "target_in_scan",
+        "provided_by",
+        "repo",
+        "metadata"
       ],
       "properties": {
         "kind": {
           "enum": [
-            "skill", "agent", "command", "mcp_server", "plugin", "marketplace", "hook",
-            "instructions", "settings", "rules", "link"
+            "skill",
+            "agent",
+            "command",
+            "mcp_server",
+            "plugin",
+            "marketplace",
+            "hook",
+            "instructions",
+            "settings",
+            "rules",
+            "link"
           ]
         },
-        "harness": {"enum": ["claude", "codex", "shared"]},
-        "scope": {"enum": ["managed", "user", "project", "local", "plugin"]},
-        "name": {"type": "string", "minLength": 1},
-        "path": {"type": "string", "minLength": 1},
-        "content_hash": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
-        "hash_scheme": {"enum": [2, null]},
-        "link_target": {"type": ["string", "null"]},
-        "target_in_scan": {"type": ["boolean", "null"]},
-        "provided_by": {"type": ["string", "null"]},
-        "repo": {"type": ["string", "null"]},
-        "metadata": {"type": "object"}
+        "harness": {
+          "enum": [
+            "claude",
+            "codex",
+            "shared"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "managed",
+            "user",
+            "project",
+            "local",
+            "plugin"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hash_scheme": {
+          "enum": [
+            2,
+            null
+          ]
+        },
+        "link_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_in_scan": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "provided_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata": {
+          "type": "object"
+        }
       }
     },
     "finding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["severity", "code", "path", "message"],
+      "required": [
+        "severity",
+        "code",
+        "path",
+        "message"
+      ],
       "properties": {
-        "severity": {"enum": ["info", "warning", "error"]},
-        "code": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-        "path": {"type": "string"},
-        "message": {"type": "string"}
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "location": {
+      "type": "object",
+      "required": [
+        "harness",
+        "scope",
+        "repo",
+        "path",
+        "provided_by"
+      ],
+      "properties": {
+        "harness": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "repo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "provided_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "since",
+        "records",
+        "adapters"
+      ],
+      "properties": {
+        "since": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "harness",
+              "kind",
+              "name",
+              "repo",
+              "calls",
+              "sessions",
+              "first_used",
+              "last_used"
+            ],
+            "properties": {
+              "harness": {
+                "enum": [
+                  "claude",
+                  "codex"
+                ]
+              },
+              "kind": {
+                "enum": [
+                  "skill",
+                  "agent",
+                  "command",
+                  "mcp_server"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "repo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "calls": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sessions": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "first_used": {
+                "type": "string"
+              },
+              "last_used": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "adapters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "adapter_version",
+              "files",
+              "malformed_total",
+              "unknown_shape_total"
+            ]
+          }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stale_days",
+        "drift",
+        "duplicates",
+        "shadowing",
+        "overlap"
+      ],
+      "properties": {
+        "stale_days": {
+          "type": "integer"
+        },
+        "drift": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "name",
+              "variants"
+            ]
+          }
+        },
+        "duplicates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "hash",
+              "names",
+              "locations"
+            ]
+          }
+        },
+        "shadowing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "harness",
+              "kind",
+              "name",
+              "repo",
+              "winner_scope",
+              "locations"
+            ]
+          }
+        },
+        "overlap": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "servers"
+            ]
+          }
+        }
+      }
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "harness",
+        "name",
+        "locations",
+        "calls",
+        "last_used",
+        "status",
+        "repos_used"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "column",
+              "scope",
+              "hash",
+              "path"
+            ],
+            "properties": {
+              "column": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "hash": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_used": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "stale",
+            "unused",
+            "n/a"
+          ]
+        },
+        "repos_used": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   }

@@ -79,6 +79,11 @@ def main() -> int:
         shown = result.stdout.replace(str(base), "<sandbox>")
         print(f"$ kitctl inventory   (cold, {elapsed:.0f} ms, exit {result.returncode})\n{shown}")
         print(result.stderr.replace(str(base), "<sandbox>"))
+        # Transcripts come from the fixtures (attributed to app-0).
+        for command in (["usage"], ["report", "--format", "html"], ["doctor"]):
+            elapsed, result = run([*kitctl, *command], env)
+            print(f"$ kitctl {' '.join(command)}   ({elapsed:.0f} ms, exit {result.returncode})")
+            print((result.stdout + result.stderr).replace(str(base), "<sandbox>"))
         timings = [run([*kitctl, "inventory"], env)[0] for _ in range(3)]
         shown_timings = ", ".join(f"{t:.0f} ms" for t in timings)
         print(f"warm runs: {shown_timings} (includes interpreter start)")

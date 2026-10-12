@@ -1,0 +1,1 @@
+{"type": "assistant", "timestamp": "2026-09-01T10:00:00.000Z", "cwd": "/elsewhere/not-a-repo", "sessionId": "s1", "version": "2.1.296", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "x", "name": "mcp__sentry__find", "input": {}}]}}

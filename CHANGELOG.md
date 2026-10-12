@@ -21,6 +21,16 @@
 - Repository discovery under configured parents; nested CLAUDE.md/AGENTS.md and skills.
 - Findings: invalid JSON/TOML, broken links, missing plugin installs, untrusted Codex
   projects, case-only name collisions, hooks that call `npx kitctl`.
+- `kitctl usage`: incremental, bounded-memory mining of Claude Code transcripts (skills,
+  subagents, slash commands, MCP servers/tools) and best-effort Codex session logs, with
+  repo attribution by working directory and `--since`.
+- `kitctl report` (md, json, html): item x repo matrix with hashes, usage, and status;
+  duplicates, drift, shadowing with precedence winners, MCP overlap, health findings.
+  Written to kitctl's cache dir; the HTML is self-contained.
+- `kitctl doctor` and `kitctl validate` (warehouse TOML: unknown fields, unsafe names,
+  traversal, missing references, `extends` cycles).
+- `scripts/bench.py` and docs/performance.md; all budgets met (warm inventory 386 ms
+  over 50 repos x 30 skills, warm usage 192 ms over 200 MB of logs).
 
 ## 0.0.1 — 2026-10-11
 

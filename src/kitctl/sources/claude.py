@@ -6,6 +6,8 @@ reference, plugin loading) and the installed CLI listed in VERIFIED_VERSIONS.
 
 from __future__ import annotations
 
+import os
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -92,9 +94,21 @@ def mcp_servers(
                 None,
                 provided_by=provided_by,
                 repo=str(repo) if repo else None,
-                metadata=mcp_server(config),
+                metadata={**mcp_server(config), **command_status(config)},
             )
         )
+
+
+def command_status(config: Any) -> dict[str, Any]:
+    """Whether a stdio server's command resolves, without reporting the command itself."""
+    if not isinstance(config, Mapping) or not isinstance(config.get("command"), str):
+        return {}
+    command = config["command"].strip()
+    if not command or "${" in command or "$" in command[:1]:
+        return {}  # plugin-root or env-expanded paths resolve only at runtime
+    if os.path.isabs(command) or "/" in command or "\\" in command:
+        return {"command_on_path": os.path.exists(command)}
+    return {"command_on_path": shutil.which(command) is not None}
 
 
 def _mcp_document(document: Any) -> Any:
