@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,40 @@ def _check(name: str, status: str, detail: str) -> dict[str, str]:
     return {"check": name, "status": status, "detail": detail}
 
 
-def harness_version(executable: str, timeout: float = 10.0) -> str | None:
+_PACKAGES = {"claude": "@anthropic-ai/claude-code", "codex": "@openai/codex"}
+_VERSION_PART = re.compile(r"^v?(\d+\.\d+\.\d+)(?:[-+._][0-9A-Za-z.]+)?$")
+
+
+def installed_version(executable: str) -> tuple[str | None, str]:
+    """Version of an installed harness CLI, read from its install path; never executes it.
+
+    Returns ``(None, "missing")`` when not on PATH and ``("", "unknown")`` when the layout
+    is unrecognized. Recognized: native installs (``.../versions/<x.y.z>``), Homebrew
+    (``Cellar/<name>/<x.y.z>``), and npm packages (nearest ``package.json``).
+    """
+    found = shutil.which(executable)
+    if not found:
+        return None, "missing"
+    real = Path(os.path.realpath(found))
+    for part in reversed(real.parts):
+        match = _VERSION_PART.match(part)
+        if match:
+            return match.group(1), "install path"
+    package = _PACKAGES.get(executable)
+    for parent in list(real.parents)[:6]:
+        manifest = parent / "package.json"
+        if package and manifest.is_file():
+            try:
+                data = json.loads(manifest.read_text("utf-8"))
+            except (OSError, ValueError):
+                continue
+            if data.get("name") == package and isinstance(data.get("version"), str):
+                return data["version"], "package.json"
+    return "", "unknown"
+
+
+def probe_version(executable: str, timeout: float = 30.0) -> str | None:
+    """Run ``<executable> --version``. Opt-in only: harness CLIs may update their own state."""
     path = shutil.which(executable)
     if not path:
         return None
@@ -40,18 +73,10 @@ def _writable(directory: Path) -> bool:
     probe = directory
     while not probe.exists() and probe != probe.parent:
         probe = probe.parent
-    if not os.access(probe, os.W_OK):
-        return False
-    try:
-        if directory.exists():
-            with tempfile.NamedTemporaryFile(dir=directory):
-                pass
-    except OSError:
-        return False
-    return True
+    return os.access(probe, os.W_OK)
 
 
-def run(with_inventory: bool = True) -> dict[str, Any]:
+def run(with_inventory: bool = True, probe: bool = False) -> dict[str, Any]:
     from kitctl.sources import claude as claude_source
     from kitctl.sources import codex as codex_source
 
@@ -63,11 +88,21 @@ def run(with_inventory: bool = True) -> dict[str, Any]:
         ("claude", claude_source, "Claude Code"),
         ("codex", codex_source, "Codex"),
     ):
-        version = harness_version(executable)
+        if probe:
+            version, source = probe_version(executable), "--version"
+        else:
+            version, source = installed_version(executable)
         if version is None:
             checks.append(_check(label, "info", f"`{executable}` not found on PATH"))
         elif not version:
-            checks.append(_check(label, "warn", f"`{executable} --version` gave no version"))
+            checks.append(
+                _check(
+                    label,
+                    "info",
+                    f"installed; version not readable from {source} layout "
+                    "(`kitctl doctor --probe` runs `--version`, which may update its state)",
+                )
+            )
         elif version in adapter.VERIFIED_VERSIONS:
             checks.append(_check(label, "ok", f"{version} (verified adapter)"))
         else:

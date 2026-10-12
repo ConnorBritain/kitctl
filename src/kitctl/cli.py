@@ -32,6 +32,24 @@ def _guard(report: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _descriptions(report: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    """Drop free-text descriptions when asked (--no-descriptions or config)."""
+    from kitctl import config as kit_config
+    from kitctl import paths as kit_paths
+
+    keep = not getattr(args, "no_descriptions", False)
+    if keep:
+        try:
+            settings = kit_config.load(kit_paths.resolve().kit_config_file)
+        except kit_config.ConfigError:
+            settings = None
+        keep = settings.export_descriptions if settings else True
+    if not keep:
+        for entry in report.get("entries", []):
+            entry["metadata"].pop("description", None)
+    return report
+
+
 def _exit_for(report: dict[str, Any]) -> int:
     errors = any(finding["severity"] == "error" for finding in report["findings"])
     return EXIT_FINDINGS if errors else EXIT_OK
@@ -67,7 +85,12 @@ def _inventory(args: argparse.Namespace) -> int:
     from kitctl.inventory import inventory
 
     try:
-        report = _guard(inventory(args.roots, use_cache=not args.no_cache))
+        report = _guard(
+            inventory(
+                args.roots, use_cache=not args.no_cache, include_worktrees=args.include_worktrees
+            )
+        )
+        report = _descriptions(report, args)
     except (OSError, ValueError, ConfigError) as error:
         print(f"kitctl: {error}", file=sys.stderr)
         return EXIT_USAGE
@@ -86,7 +109,9 @@ def _usage(args: argparse.Namespace) -> int:
 
     try:
         paths = kit_paths.resolve()
-        repos, _ = resolve_repos(args.roots, kit_config.load(paths.kit_config_file))
+        repos, _, _ = resolve_repos(
+            args.roots, kit_config.load(paths.kit_config_file), args.include_worktrees
+        )
         result = _guard_any(mine(paths, repos, since=args.since, use_cache=not args.no_cache))
     except (OSError, ValueError) as error:
         print(f"kitctl: {error}", file=sys.stderr)
@@ -127,7 +152,15 @@ def _report(args: argparse.Namespace) -> int:
     from kitctl.secretscan import redact
 
     try:
-        built = _guard(kit_report.build(args.roots, since=args.since, use_cache=not args.no_cache))
+        built = _guard(
+            kit_report.build(
+                args.roots,
+                since=args.since,
+                use_cache=not args.no_cache,
+                include_worktrees=args.include_worktrees,
+            )
+        )
+        built = _descriptions(built, args)
     except (OSError, ValueError, ConfigError) as error:
         print(f"kitctl: {error}", file=sys.stderr)
         return EXIT_USAGE
@@ -146,8 +179,11 @@ def _report(args: argparse.Namespace) -> int:
     text, kinds = redact(kit_report.render(built, args.format))
     if kinds:
         print(f"warning: redacted likely secrets ({', '.join(kinds)})", file=sys.stderr)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, "utf-8")
+    from kitctl import fs
+
+    if args.out:
+        fs.allow(target.parent)
+    fs.write_atomic(target, text)
     print(target)
     errors = sum(f["severity"] == "error" for f in built["findings"])
     warnings = sum(f["severity"] == "warning" for f in built["findings"])
@@ -162,7 +198,7 @@ def _report(args: argparse.Namespace) -> int:
 def _doctor(args: argparse.Namespace) -> int:
     from kitctl.doctor import run
 
-    result = _guard_any(run())
+    result = _guard_any(run(probe=args.probe))
     if args.json:
         print(json.dumps(result, indent=2))
     else:
@@ -197,10 +233,13 @@ def _validate(args: argparse.Namespace) -> int:
     else:
         for finding in result["findings"]:
             print(f"{finding['severity']}: {finding['message']} [{finding['path']}]")
-        print(
-            f"{result['primitives']} primitives, {result['loadouts']} loadouts, "
-            f"{len(result['findings'])} problems in {result['warehouse']}"
-        )
+        if not result["primitives"] and not result["loadouts"]:
+            print(f"Nothing to validate in {result['warehouse']} (0 primitives, 0 loadouts).")
+        else:
+            print(
+                f"{result['primitives']} primitives, {result['loadouts']} loadouts, "
+                f"{len(result['findings'])} problems in {result['warehouse']}"
+            )
     return _exit_for(result)
 
 
@@ -208,6 +247,22 @@ def _init(args: argparse.Namespace) -> int:
     from kitctl.init import run_init
 
     return run_init(args)
+
+
+def _common(parser: argparse.ArgumentParser, descriptions: bool) -> None:
+    parser.add_argument(
+        "--include-worktrees",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Scan git worktrees too (skipped by default; config include_worktrees).",
+    )
+    if descriptions:
+        parser.add_argument(
+            "--no-descriptions",
+            action="store_true",
+            help="Omit skill/agent/command/plugin descriptions (names-only export).",
+        )
 
 
 def _date(value: str) -> str:
@@ -253,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     scan.add_argument("--json", action="store_true", help="Print the report as JSON.")
     scan.add_argument("--no-cache", action="store_true", help="Don't use the hash cache.")
+    _common(scan, descriptions=True)
     scan.set_defaults(handler=_inventory)
 
     usage = commands.add_parser("usage", help="Mine session logs for skill/agent/MCP usage.")
@@ -267,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     usage.add_argument("--since", type=_date, help="Only count use on or after YYYY-MM-DD.")
     usage.add_argument("--json", action="store_true")
     usage.add_argument("--no-cache", action="store_true", help="Re-read every log in full.")
+    _common(usage, descriptions=False)
     usage.set_defaults(handler=_usage)
 
     report = commands.add_parser("report", help="Write an inventory, usage, and findings report.")
@@ -276,10 +333,16 @@ def main(argv: list[str] | None = None) -> int:
     report.add_argument("--root", action="append", type=Path, dest="roots", metavar="PATH")
     report.add_argument("--since", type=_date, help="Only count use on or after YYYY-MM-DD.")
     report.add_argument("--no-cache", action="store_true")
+    _common(report, descriptions=True)
     report.set_defaults(handler=_report)
 
     doctor = commands.add_parser("doctor", help="Check the environment and harness setup.")
     doctor.add_argument("--json", action="store_true")
+    doctor.add_argument(
+        "--probe",
+        action="store_true",
+        help="Run `claude/codex --version` (may update the harness's own caches or logs).",
+    )
     doctor.set_defaults(handler=_doctor)
 
     validate = commands.add_parser("validate", help="Validate warehouse loadouts and primitives.")

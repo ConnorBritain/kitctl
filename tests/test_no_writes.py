@@ -7,6 +7,7 @@ import pytest
 
 from kitctl.cli import main
 from kitctl.paths import resolve
+from tests.audit import guarded
 
 
 def snapshot(roots: list[Path], exclude: list[Path]) -> dict[str, tuple[bytes, int]]:
@@ -44,8 +45,21 @@ def test_command_leaves_agent_config_untouched(
     roots = [tmp_path]
     before = snapshot(roots, exclude)
     assert before, "fixture should populate the sandbox"
-    try:
-        main(command)
-    except SystemExit:
-        pass
+    with guarded(exclude) as violations:
+        try:
+            main(command)
+        except SystemExit:
+            pass
+    assert violations == [], violations
     assert snapshot(roots, exclude) == before
+
+
+def test_guard_catches_writes_and_subprocesses(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    with guarded([tmp_path / "ok"]) as violations:
+        (tmp_path / "bad.txt").write_text("x")
+        subprocess.run([sys.executable, "-c", "pass"], check=False)
+    assert any("bad.txt" in v for v in violations)
+    assert any("subprocess" in v or "posix_spawn" in v for v in violations)

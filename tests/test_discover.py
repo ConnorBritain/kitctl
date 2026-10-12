@@ -47,3 +47,18 @@ def test_init_detects_parents_once_on_case_insensitive_fs(tmp_path: Path) -> Non
     (tmp_path / "Code").mkdir()
     (tmp_path / "src").mkdir()
     assert _detect_parents(tmp_path) == [str(tmp_path / "Code"), str(tmp_path / "src")]
+
+
+def test_worktrees_skipped_by_default(tmp_path: Path) -> None:
+    from kitctl.discover import find_repos_detail
+
+    main_repo = make_repo(tmp_path / "Code/app")
+    worktree = tmp_path / "Code/app-feature"
+    worktree.mkdir(parents=True)
+    (worktree / ".git").write_text(f"gitdir: {main_repo}/.git/worktrees/app-feature\n")
+    submodule_style = tmp_path / "Code/lib"
+    submodule_style.mkdir()
+    (submodule_style / ".git").write_text("gitdir: ../elsewhere/.git/modules/lib\n")
+    repos, skipped = find_repos_detail([tmp_path / "Code"])
+    assert repos == [main_repo, submodule_style] and skipped == [worktree]
+    assert worktree in find_repos([tmp_path / "Code"], include_worktrees=True)

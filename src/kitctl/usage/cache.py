@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -65,14 +64,13 @@ class UsageCache:
     def save(self) -> None:
         if not self.location:
             return
-        self.location.parent.mkdir(parents=True, exist_ok=True)
-        staging = self.location.with_suffix(".tmp")
+        from kitctl.fs import write_atomic
+
         payload = {
             "stamp": self.stamp,
             "files": {path: state.__dict__ for path, state in self.files.items()},
         }
-        staging.write_text(json.dumps(payload, separators=(",", ":")), "utf-8")
-        os.replace(staging, self.location)
+        write_atomic(self.location, json.dumps(payload, separators=(",", ":")))
 
     def scan(self, paths: Iterable[Path], parse: Parser) -> ScanStats:
         stats = ScanStats()

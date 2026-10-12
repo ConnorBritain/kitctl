@@ -4,3 +4,10 @@
 {"timestamp": "2026-10-01T08:00:03Z", "type": "event_msg", "payload": {"type": "mcp_tool_call_begin", "invocation": {"server": "remote", "tool": "get", "arguments": {"k": "{{CANARY}}"}}}}
 {"timestamp": "2026-10-01T08:00:04Z", "type": "response_item", "payload": {"type": "function_call", "name": "shell", "arguments": "{{CANARY}}"}}
 {"timestamp": "2026-10-01T08:00:05Z", "type": "future_record_kind", "payload": {}}
+{"timestamp": "2026-10-01T08:01:00Z", "type": "response_item", "payload": {"type": "function_call", "name": "search", "namespace": "mcp__tana", "call_id": "c1", "arguments": "{{CANARY}}"}}
+{"timestamp": "2026-10-01T08:01:01Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "McpToolCall", "id": "i1", "server": "tana", "tool": "search", "arguments": {"q": "{{CANARY}}"}, "result": "{{CANARY}}", "status": "completed"}}}
+{"timestamp": "2026-10-01T08:01:02Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "McpToolCall", "id": "i1", "server": "tana", "tool": "search"}}}
+{"timestamp": "2026-10-01T08:01:03Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "McpToolCall", "id": "i2", "server": "tana", "tool": "get"}}}
+{"timestamp": "2026-10-01T08:01:04Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "CommandExecution", "id": "i3"}}}
+{"timestamp": "2026-10-01T08:01:05Z", "type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "HologramCall", "id": "i4"}}}
+{"timestamp": "2026-10-01T08:01:06Z", "type": "world_state", "payload": {}}

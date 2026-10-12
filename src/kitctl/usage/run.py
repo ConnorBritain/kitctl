@@ -37,12 +37,17 @@ def mine(
         except OSError:
             pass
         malformed, unknown = cache.totals()
+        extras = {
+            key: sum(int(state.state.get(key, 0)) for state in cache.files.values())
+            for key in ("namespaced_calls", "unrecognized_items")
+        }
         adapters[module.HARNESS] = {
             **asdict(stats),
             "adapter_version": module.ADAPTER_VERSION,
             "verified_versions": list(module.VERIFIED_VERSIONS),
             "malformed_total": malformed,
             "unknown_shape_total": unknown,
+            **extras,
         }
         records.extend(_aggregate(module.HARNESS, cache, repos, since))
     records.sort(key=lambda r: (r.harness, r.kind, r.name, r.repo or ""))

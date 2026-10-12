@@ -70,3 +70,9 @@ def test_cycle(warehouse: Path) -> None:
 
 def test_missing_warehouse(tmp_path: Path) -> None:
     assert main(["validate", "--warehouse", str(tmp_path / "nope")]) == 2
+
+
+def test_empty_warehouse_message(tmp_path: Path, capsys) -> None:
+    (tmp_path / "home/kits").mkdir(parents=True)
+    assert main(["validate"]) == 0
+    assert "Nothing to validate" in capsys.readouterr().out

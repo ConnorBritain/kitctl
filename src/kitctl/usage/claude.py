@@ -18,7 +18,7 @@ from kitctl.usage.cache import UnknownShape
 
 HARNESS = "claude"
 ADAPTER_VERSION = 1
-VERIFIED_VERSIONS = ("2.1.296",)
+VERIFIED_VERSIONS = ("2.1.86", "2.1.296")
 _COMMAND = re.compile(r"<command-name>/?([^<\s]{1,200})</command-name>")
 
 

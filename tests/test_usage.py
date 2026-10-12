@@ -34,13 +34,17 @@ def test_claude_transcript_events_and_privacy(harnesses: Path) -> None:
 
 def test_codex_session_events_fail_soft(harnesses: Path) -> None:
     result = mine(resolve(), [harnesses])
-    codex = [r for r in result["records"] if r["harness"] == "codex"]
-    assert {(r["name"], r["repo"]) for r in codex} == {
-        ("docs", str(harnesses)),
-        ("remote", str(harnesses)),
+    codex = {
+        (r["name"], r["repo"]): r["calls"] for r in result["records"] if r["harness"] == "codex"
     }
-    assert result["adapters"]["codex"]["unknown_shape_total"] == 1
-    assert CANARY not in json.dumps(codex)
+    repo = str(harnesses)
+    # McpToolCall items deduplicated by id; namespaced function_calls tallied, not counted.
+    assert codex == {("remote", repo): 1, ("tana", repo): 2, ("linear", None): 1}
+    stats = result["adapters"]["codex"]
+    assert stats["unknown_shape_total"] == 1
+    assert stats["namespaced_calls"] == 1 and stats["unrecognized_items"] == 1
+    assert stats["files"] == 2  # sessions + archived_sessions
+    assert CANARY not in json.dumps(result)
 
 
 def test_since_filter(harnesses: Path) -> None:
@@ -67,7 +71,7 @@ def skill_line(name: str, ts: str = "2026-10-01T00:00:00Z") -> dict:
 def test_incremental_cache_reads_only_new_bytes(tmp_path: Path) -> None:
     log = tmp_path / "s.jsonl"
     write_lines(log, [skill_line("a"), skill_line("b")], "w")
-    store = tmp_path / "cache.json"
+    store = resolve().kit_cache_dir / "test-cache.json"
     cache = UsageCache(store, "claude", 1)
     first = cache.scan([log], claude_usage.parse)
     cache.save()
@@ -120,7 +124,7 @@ def test_oversized_line_is_skipped_not_buffered(tmp_path: Path) -> None:
 def test_adapter_version_change_invalidates_cache(tmp_path: Path) -> None:
     log = tmp_path / "s.jsonl"
     write_lines(log, [skill_line("a")], "w")
-    store = tmp_path / "cache.json"
+    store = resolve().kit_cache_dir / "test-cache.json"
     cache = UsageCache(store, "claude", 1)
     cache.scan([log], claude_usage.parse)
     cache.save()

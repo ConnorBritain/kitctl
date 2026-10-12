@@ -58,9 +58,31 @@ def is_repo(directory: Path) -> bool:
     return (directory / ".git").exists()
 
 
-def find_repos(parents: Iterable[Path], max_depth: int = 3) -> list[Path]:
+def is_worktree(directory: Path) -> bool:
+    """A linked git worktree: ``.git`` is a file pointing into ``.../worktrees/<name>``."""
+    marker = directory / ".git"
+    if not marker.is_file():
+        return False
+    try:
+        head = marker.read_text("utf-8", errors="replace")[:4096]
+    except OSError:
+        return False
+    return "gitdir:" in head and "/worktrees/" in head.replace("\\", "/")
+
+
+def find_repos(
+    parents: Iterable[Path], max_depth: int = 3, include_worktrees: bool = False
+) -> list[Path]:
     """Directories containing ``.git`` up to ``max_depth`` below each parent; never nested."""
+    return find_repos_detail(parents, max_depth, include_worktrees)[0]
+
+
+def find_repos_detail(
+    parents: Iterable[Path], max_depth: int = 3, include_worktrees: bool = False
+) -> tuple[list[Path], list[Path]]:
+    """``(repos, skipped_worktrees)``. Worktrees are skipped unless ``include_worktrees``."""
     repos: list[Path] = []
+    skipped: list[Path] = []
     visited: set[tuple[int, int] | str] = set()
     for parent in parents:
         frontier = [(parent.expanduser(), 0)]
@@ -71,11 +93,14 @@ def find_repos(parents: Iterable[Path], max_depth: int = 3) -> list[Path]:
                 continue
             visited.add(identity)
             if is_repo(directory):
-                repos.append(directory)
+                if include_worktrees or not is_worktree(directory):
+                    repos.append(directory)
+                else:
+                    skipped.append(directory)
                 continue
             if depth < max_depth:
                 frontier.extend((child, depth + 1) for child in _subdirs(directory))
-    return sorted(set(repos))
+    return sorted(set(repos)), sorted(set(skipped))
 
 
 def nested_dirs(repo: Path, max_depth: int = 6) -> Iterator[Path]:

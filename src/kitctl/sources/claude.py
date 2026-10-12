@@ -21,7 +21,7 @@ from kitctl.safemeta import canonical_hash, iter_hooks, mcp_server, settings
 from kitctl.scan import within
 
 HARNESS = "claude"
-VERIFIED_VERSIONS = ("2.1.296",)
+VERIFIED_VERSIONS = ("2.1.86", "2.1.296")
 
 PROJECT_INSTRUCTIONS = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
 NESTED_INSTRUCTIONS = ("CLAUDE.md",)
@@ -372,6 +372,15 @@ def collect_user(c: Collector, paths: Paths) -> None:
             mcp_servers(c, document.get("mcpServers"), paths.claude_json, "user")
             if isinstance(projects, Mapping):
                 for project, state in projects.items():
+                    servers = state.get("mcpServers") if isinstance(state, Mapping) else None
+                    if isinstance(servers, Mapping) and servers and not Path(str(project)).exists():
+                        c.finding(
+                            "info",
+                            "stale-local-project",
+                            paths.claude_json,
+                            f"{len(servers)} local MCP server(s) configured for a project path "
+                            f"that no longer exists: {project}",
+                        )
                     if isinstance(state, Mapping):
                         mcp_servers(
                             c,

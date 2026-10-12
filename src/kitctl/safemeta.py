@@ -63,7 +63,9 @@ def mcp_server(config: Any) -> dict[str, Any]:
         transport = "http" if url else "stdio"
     meta: dict[str, Any] = {"transport": transport}
     if command:
-        meta["command"] = basename(command.split()[0]) if command.strip() else command
+        # Harnesses pass args separately, so the whole string is the program path (which
+        # may contain spaces, e.g. "/Applications/Some App.app/Contents/MacOS/server").
+        meta["command"] = basename(command.strip())
     if isinstance(config.get("args"), list):
         meta["arg_count"] = len(config["args"])
     if url:

@@ -13,3 +13,9 @@ disabled_tools = ["delete"]
 
 [projects."{{REPO}}"]
 trust_level = "trusted"
+
+[plugins."code-review@openai-bundled"]
+enabled = true
+
+[plugins."prose-review@agent-primitives"]
+enabled = false

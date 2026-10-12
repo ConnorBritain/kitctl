@@ -22,10 +22,13 @@ def build(
     roots: list[Path] | None = None,
     since: str | None = None,
     use_cache: bool = True,
+    include_worktrees: bool | None = None,
 ) -> dict[str, Any]:
     paths = kit_paths.resolve()
     settings = kit_config.load(paths.kit_config_file)
-    report = inventory(roots, use_cache=use_cache, settings=settings)
+    report = inventory(
+        roots, use_cache=use_cache, settings=settings, include_worktrees=include_worktrees
+    )
     repos = [Path(repo) for repo in report["roots"]["repos"]]
     usage = mine(paths, repos, since=since, use_cache=use_cache)
     stale_days = settings.stale_days if settings else 60
@@ -138,6 +141,12 @@ def _summary(report: dict[str, Any]) -> list[tuple[str, str]]:
             f"{len(result['duplicates'])} duplicate groups, {len(result['drift'])} drifted, "
             f"{len(result['shadowing'])} shadowed, {len(result['overlap'])} MCP overlaps",
         ),
+        (
+            "Usage outside inventory",
+            f"{sum(u['calls'] for u in result['unmatched_usage'])} calls to "
+            f"{len(result['unmatched_usage'])} names not in the current inventory "
+            "(removed, built-in, or claude.ai connectors)",
+        ),
     ]
 
 
@@ -212,6 +221,13 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- {o['key']}: "
         + ", ".join(f"{s['name']} ({s['harness']}/{s['scope']})" for s in o["servers"])
         for o in result["overlap"]
+    ] or ["None."]
+    out += ["", "## Used but not in the current inventory", ""]
+    out += ["Removed items, harness built-ins, or claude.ai connectors still get used:", ""]
+    out += [
+        f"- {u['harness']} {u['kind']} **{_md_escape(u['name'])}**: {u['calls']} calls, "
+        f"last {u['last_used'][:10]}" + (f" ({Path(u['repo']).name})" if u["repo"] else "")
+        for u in result["unmatched_usage"][:50]
     ] or ["None."]
     out += ["", "## Usage sources", ""]
     for adapter, stats in report["usage"]["adapters"].items():
@@ -320,9 +336,18 @@ def render_html(report: dict[str, Any]) -> str:
             ],
         ),
         (
+            "Used but not in inventory",
+            [
+                f"{u['harness']} {u['kind']} {u['name']}: {u['calls']} calls"
+                for u in result["unmatched_usage"][:50]
+            ],
+        ),
+        (
             "Drift",
             [
-                f"{d['kind']} {d['name']}: "
+                f"{d['kind']} {d['name']}"
+                + (" (Claude vs Codex)" if d["cross_harness"] else "")
+                + ": "
                 + " vs ".join(f"{v['hash'][:12]} ({len(v['locations'])})" for v in d["variants"])
                 for d in result["drift"]
             ],

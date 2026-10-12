@@ -117,8 +117,8 @@ class HashCache:
     def save(self) -> None:
         if not (self.location and self._dirty):
             return
-        self.location.parent.mkdir(parents=True, exist_ok=True)
-        staging = self.location.with_suffix(".tmp")
+        from kitctl.fs import write_atomic
+
         live = {str(entry[3]) for entry in self._entries.values()}
         memo = {digest: value for digest, value in self.memo.items() if digest in live}
         payload = {
@@ -127,6 +127,5 @@ class HashCache:
             "entries": self._entries,
             "memo": memo,
         }
-        staging.write_text(json.dumps(payload), "utf-8")
-        os.replace(staging, self.location)
+        write_atomic(self.location, json.dumps(payload))
         self._dirty = False

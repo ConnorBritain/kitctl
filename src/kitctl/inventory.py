@@ -41,16 +41,23 @@ def _case_collisions(c: Collector) -> None:
 
 
 def resolve_repos(
-    roots: list[Path] | None, settings: kit_config.UserConfig | None
-) -> tuple[list[Path], str]:
+    roots: list[Path] | None,
+    settings: kit_config.UserConfig | None,
+    include_worktrees: bool | None = None,
+) -> tuple[list[Path], str, list[Path]]:
+    """``(repos, mode, skipped_worktrees)``."""
     if roots:
         for root in roots:
             if not root.expanduser().is_dir():
                 raise ValueError(f"Inventory root is not a directory: {root}")
-        return [root.expanduser() for root in roots], "explicit"
+        return [root.expanduser() for root in roots], "explicit", []
     if settings and settings.repo_parents:
-        return discover.find_repos(settings.parent_paths(), settings.discovery_depth), "config"
-    return [Path.cwd()], "cwd"
+        include = settings.include_worktrees if include_worktrees is None else include_worktrees
+        repos, skipped = discover.find_repos_detail(
+            settings.parent_paths(), settings.discovery_depth, include
+        )
+        return repos, "config", skipped
+    return [Path.cwd()], "cwd", []
 
 
 def inventory(
@@ -58,12 +65,13 @@ def inventory(
     *,
     use_cache: bool = True,
     settings: kit_config.UserConfig | None = None,
-    nested_depth: int = 6,
+    nested_depth: int = 4,
+    include_worktrees: bool | None = None,
 ) -> dict[str, Any]:
     paths = kit_paths.resolve()
     if settings is None:
         settings = kit_config.load(paths.kit_config_file)
-    repos, mode = resolve_repos(roots, settings)
+    repos, mode, skipped_worktrees = resolve_repos(roots, settings, include_worktrees)
     repos = list(normalize_roots(repos))
     home = Path(os.path.realpath(paths.home))
     project_repos = [repo for repo in repos if repo != home]
@@ -99,6 +107,7 @@ def inventory(
             "repos": [str(repo) for repo in project_repos],
             "claude_config_dir": str(paths.claude_config_dir),
             "codex_home": str(paths.codex_home),
+            "skipped_worktrees": len(skipped_worktrees),
         },
         "entries": [entry.to_dict() for entry in c.entries],
         "findings": [finding.to_dict() for finding in c.findings],

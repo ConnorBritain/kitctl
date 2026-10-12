@@ -1,0 +1,1 @@
+{"mcpServers": {"code-review": {"command": "/opt/Codex Helpers/review-mcp", "env": {"TOKEN": "{{CANARY}}"}}}}

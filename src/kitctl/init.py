@@ -78,6 +78,9 @@ def run_init(args: argparse.Namespace) -> int:
     if not Path(settings.warehouse).is_dir():
         print(f"note: warehouse not found at {settings.warehouse} (needed for triage/adopt)")
     kit_config.save(settings, target)
-    repos = discover.find_repos(settings.parent_paths(), settings.discovery_depth)
-    print(f"Wrote {target}. Found {len(repos)} repositories. No agent configuration changed.")
+    repos, skipped = discover.find_repos_detail(settings.parent_paths(), settings.discovery_depth)
+    extra = f" (skipped {len(skipped)} git worktrees)" if skipped else ""
+    print(
+        f"Wrote {target}. Found {len(repos)} repositories{extra}. No agent configuration changed."
+    )
     return 0

@@ -50,7 +50,9 @@ def test_tree_digest_nfc_and_order_independent() -> None:
 def test_hash_cache_reuses_and_invalidates(tmp_path: Path) -> None:
     target = tmp_path / "file.txt"
     target.write_text("one")
-    store = tmp_path / "cache/hashes.json"
+    from kitctl.paths import resolve
+
+    store = resolve().kit_cache_dir / "hashes.json"
     cache = HashCache(store)
     first = cache.digest(target)
     cache.save()
@@ -59,3 +61,16 @@ def test_hash_cache_reuses_and_invalidates(tmp_path: Path) -> None:
     assert reloaded.digest(target) == first
     target.write_text("two!")
     assert reloaded.digest(target) != first
+
+
+def test_writes_outside_kitctl_dirs_are_refused(tmp_path: Path) -> None:
+    import pytest
+
+    from kitctl import fs
+
+    with pytest.raises(fs.WriteRefused):
+        fs.write_atomic(tmp_path / "home/.claude/settings.json", "{}")
+    assert not (tmp_path / "home/.claude/settings.json").exists()
+    fs.allow(tmp_path / "out")
+    fs.write_atomic(tmp_path / "out/report.md", "ok")
+    assert (tmp_path / "out/report.md").read_text() == "ok"

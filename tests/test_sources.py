@@ -159,3 +159,25 @@ def test_case_collision_reported(sandbox: Path) -> None:
         (skill / "SKILL.md").write_text(name)
     report = inventory([sandbox])
     assert any(f["code"] == "case-collision" for f in report["findings"])
+
+
+def test_codex_plugin_cache_layout(harnesses: Path) -> None:
+    report = inventory([harnesses])
+    plugins = {e["name"]: e for e in find(report, kind="plugin", harness="codex")}
+    assert set(plugins) == {"code-review@openai-bundled", "prose-review@agent-primitives"}
+    review = plugins["code-review@openai-bundled"]
+    assert review["metadata"]["version"] == "1.2.0" and review["metadata"]["cached_versions"] == 2
+    assert review["metadata"]["enabled"] is True
+    assert plugins["prose-review@agent-primitives"]["metadata"]["enabled"] is False
+    provided = {(e["kind"], e["name"]) for e in find(report, provided_by=review["name"])}
+    assert provided == {("skill", "review"), ("mcp_server", "code-review")}
+    skill = find(report, kind="skill", name="review")[0]
+    assert skill["metadata"]["description"].endswith("(1.2.0)")
+    server = find(report, kind="mcp_server", name="code-review")[0]
+    assert server["scope"] == "plugin" and server["metadata"]["command"] == "review-mcp"
+
+
+def test_codex_system_skills(harnesses: Path) -> None:
+    report = inventory([harnesses])
+    imagegen = find(report, kind="skill", name="imagegen")[0]
+    assert imagegen["provided_by"] == "codex:system" and imagegen["harness"] == "codex"

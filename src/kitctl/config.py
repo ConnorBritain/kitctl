@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,6 +20,8 @@ class UserConfig:
     warehouse: str = ""
     discovery_depth: int = 3
     stale_days: int = 60
+    include_worktrees: bool = False
+    export_descriptions: bool = True
     schema_version: int = SCHEMA_VERSION
 
     def parent_paths(self) -> list[Path]:
@@ -36,6 +37,8 @@ _TYPES: dict[str, type] = {
     "warehouse": str,
     "discovery_depth": int,
     "stale_days": int,
+    "include_worktrees": bool,
+    "export_descriptions": bool,
 }
 
 
@@ -104,12 +107,13 @@ def dumps(config: UserConfig) -> str:
         f"warehouse = {_toml_value(config.warehouse)}",
         f"discovery_depth = {config.discovery_depth}",
         f"stale_days = {config.stale_days}",
+        f"include_worktrees = {_toml_value(config.include_worktrees)}",
+        f"export_descriptions = {_toml_value(config.export_descriptions)}",
     ]
     return "\n".join(lines) + "\n"
 
 
 def save(config: UserConfig, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    staging = path.with_suffix(".tmp")
-    staging.write_text(dumps(config), "utf-8")
-    os.replace(staging, path)
+    from kitctl.fs import write_atomic
+
+    write_atomic(path, dumps(config))

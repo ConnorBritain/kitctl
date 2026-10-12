@@ -48,7 +48,8 @@
         "mode",
         "repos",
         "claude_config_dir",
-        "codex_home"
+        "codex_home",
+        "skipped_worktrees"
       ],
       "properties": {
         "mode": {
@@ -69,6 +70,10 @@
         },
         "codex_home": {
           "type": "string"
+        },
+        "skipped_worktrees": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -377,7 +382,8 @@
         "drift",
         "duplicates",
         "shadowing",
-        "overlap"
+        "overlap",
+        "unmatched_usage"
       ],
       "properties": {
         "stale_days": {
@@ -427,6 +433,20 @@
             "required": [
               "key",
               "servers"
+            ]
+          }
+        },
+        "unmatched_usage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "harness",
+              "kind",
+              "name",
+              "repo",
+              "calls",
+              "last_used"
             ]
           }
         }

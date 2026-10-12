@@ -12,8 +12,9 @@ from kitctl.model import Finding
 Entry = dict[str, Any]
 
 # Kinds compared by content across locations.
-COMPARABLE = frozenset({"skill", "agent", "command", "rules", "mcp_server", "hook"})
-DUPLICABLE = COMPARABLE | {"instructions"}
+# Hooks are excluded from drift: distinct hooks often share event/matcher/program.
+COMPARABLE = frozenset({"skill", "agent", "command", "rules", "mcp_server"})
+DUPLICABLE = COMPARABLE | {"instructions", "hook"}
 USAGE_KINDS = frozenset({"skill", "agent", "command", "mcp_server", "plugin"})
 LAUNCHERS = frozenset(
     {
@@ -67,6 +68,8 @@ def drift(entries: list[Entry]) -> list[dict[str, Any]]:
         {
             "kind": kind,
             "name": name,
+            "cross_harness": len({e["harness"] for members in variants.values() for e in members})
+            > 1,
             "variants": [
                 {"hash": digest, "locations": [_location(e) for e in members]}
                 for digest, members in sorted(variants.items())
@@ -157,7 +160,11 @@ def health(entries: list[Entry]) -> list[Finding]:
                     "SKILL.md lacks frontmatter name or description; harnesses may not list it",
                 )
             )
-        if entry["kind"] == "mcp_server" and meta.get("command_on_path") is False:
+        if (
+            entry["kind"] == "mcp_server"
+            and meta.get("command_on_path") is False
+            and not meta.get("disabled")
+        ):
             missing[(entry["harness"], entry["name"], str(meta.get("command")))].append(entry)
     for (harness, name, command), places in sorted(missing.items()):
         where = f" ({len(places)} configs)" if len(places) > 1 else ""
@@ -290,7 +297,8 @@ def analyze(entries: list[Entry], records: list[dict[str, Any]], stale_days: int
                 "warning",
                 "drift",
                 item["variants"][0]["locations"][0]["path"],
-                f"{item['kind']} {item['name']!r} has {len(item['variants'])} differing copies",
+                f"{item['kind']} {item['name']!r} has {len(item['variants'])} differing copies"
+                + (" (Claude and Codex copies differ)" if item["cross_harness"] else ""),
             )
         )
     for item in found_overlap:
@@ -303,12 +311,22 @@ def analyze(entries: list[Entry], records: list[dict[str, Any]], stale_days: int
                 f"MCP servers {', '.join(names)} share {item['key']}",
             )
         )
+    per_entry = usage_by_entry(entries, records, stale_days)
+    matched = {key for usage in per_entry for key in usage["records"]}
+    unmatched = sorted(
+        (r for r in records if _record_id(r) not in matched),
+        key=lambda r: (-r["calls"], r["harness"], r["kind"], r["name"]),
+    )
     return {
         "stale_days": stale_days,
+        "unmatched_usage": [
+            {k: r[k] for k in ("harness", "kind", "name", "repo", "calls", "last_used")}
+            for r in unmatched
+        ],
         "drift": found_drift,
         "duplicates": found_dupes,
         "shadowing": found_shadow,
         "overlap": found_overlap,
         "findings": [f.to_dict() for f in findings],
-        "usage_by_entry": usage_by_entry(entries, records, stale_days),
+        "usage_by_entry": per_entry,
     }

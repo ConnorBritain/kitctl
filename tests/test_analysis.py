@@ -30,6 +30,17 @@ def test_drift_and_duplicates() -> None:
     ]
     drift = analysis.drift(entries)
     assert drift[0]["name"] == "writer" and len(drift[0]["variants"]) == 2
+    assert drift[0]["cross_harness"] is False
+    hooks = [
+        entry("hook", "Pre:Bash:x", digest="1" * 64),
+        entry("hook", "Pre:Bash:x", digest="2" * 64),
+    ]
+    assert analysis.drift(hooks) == []
+    crossed = [
+        entry("skill", "w", digest="a" * 64),
+        entry("skill", "w", digest="b" * 64, harness="codex"),
+    ]
+    assert analysis.drift(crossed)[0]["cross_harness"] is True
     dupes = analysis.duplicates(entries)
     assert dupes[0]["names"] == ["copy", "writer"]
 
@@ -63,6 +74,11 @@ def test_health_findings() -> None:
     entries = [
         entry("skill", "bare", metadata={"frontmatter_name": None}),
         entry("mcp_server", "x", metadata={"command": "x", "command_on_path": False}),
+        entry(
+            "mcp_server",
+            "off",
+            metadata={"command": "y", "command_on_path": False, "disabled": True},
+        ),
         entry(
             "settings",
             "settings.json",

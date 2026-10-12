@@ -46,3 +46,13 @@ def test_iter_hooks_tolerates_bad_shapes() -> None:
         iter_hooks({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "x"}]}]}})
     )
     assert hooks[0]["event"] == "Stop" and hooks[0]["matcher"] == "*"
+
+
+def test_command_basename_keeps_spaces_in_program_path() -> None:
+    meta = mcp_server({"command": "/Applications/Codex Computer Use.app/Contents/MacOS/cua"})
+    assert meta["command"] == "cua"
+    assert mcp_server({"command": "my server.exe"})["command"] == "my server.exe"
+
+
+def test_disabled_codex_server_flag() -> None:
+    assert mcp_server({"command": "x", "enabled": False})["disabled"] is True

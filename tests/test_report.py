@@ -46,3 +46,26 @@ def test_report_refuses_repo_output(harnesses: Path, tmp_path: Path) -> None:
     outside = tmp_path / "reports"
     assert main(["report", "--root", str(harnesses), "--out", str(outside)]) == 0
     assert list(outside.glob("report-*.md"))
+
+
+def test_unmatched_usage_and_no_descriptions(harnesses: Path, capsys) -> None:
+    built = kit_report.build([harnesses])
+    unmatched = {(u["harness"], u["name"]) for u in built["analysis"]["unmatched_usage"]}
+    assert ("codex", "tana") in unmatched and ("codex", "linear") in unmatched
+    assert ("claude", "github") not in unmatched
+    assert main(["inventory", "--root", str(harnesses), "--json", "--no-descriptions"]) == 0
+    assert '"description"' not in capsys.readouterr().out
+
+
+def test_stale_local_project(harnesses: Path, tmp_path: Path) -> None:
+    import json as _json
+
+    claude_json = tmp_path / "home/.claude/.claude.json"
+    data = _json.loads(claude_json.read_text())
+    data["projects"][str(tmp_path / "deleted-workspace")] = {
+        "mcpServers": {"figma": {"url": "https://x.example"}}
+    }
+    claude_json.write_text(_json.dumps(data))
+    built = kit_report.build([harnesses])
+    stale = [f for f in built["findings"] if f["code"] == "stale-local-project"]
+    assert len(stale) == 1 and "deleted-workspace" in stale[0]["message"]
