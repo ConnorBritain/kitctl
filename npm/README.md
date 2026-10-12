@@ -23,6 +23,7 @@ kitctl inventory --root ~/Code/app --json
 kitctl usage                    # skill/agent/command/MCP calls mined from session logs
 kitctl report --format html     # inventory x repo matrix, usage, findings (md|json|html)
 kitctl doctor                   # harness versions, paths, trust, hook latency risks
+kitctl conformance              # compare with `claude`/`codex` list commands (runs them)
 kitctl validate                 # warehouse loadouts and primitives (~/kits)
 ```
 
@@ -61,6 +62,12 @@ or `%LOCALAPPDATA%\kitctl\Cache\reports`) and refuses `--out` inside a scanned r
 name, different content), shadowing (same name at several scopes, with the winning scope),
 MCP servers sharing a command or host, and health findings such as enabled-but-missing
 plugins, MCP commands not on PATH, and skills without frontmatter.
+
+Git worktrees are skipped by default (`include_worktrees = true` or `--include-worktrees`
+to scan them). `--no-descriptions` (or `export_descriptions = false`) gives names-only
+exports. `kitctl doctor` reads harness versions from their install paths and never runs
+them; `doctor --probe` runs `--version`. `kitctl conformance` is the one command that runs
+harness CLIs, to compare their own listings with the inventory.
 
 Hooks must call an installed `kitctl` (`uv tool install kitctl` or `pipx install kitctl`),
 never `npx kitctl`: the Node → uv → Python chain cannot meet a session-start budget.

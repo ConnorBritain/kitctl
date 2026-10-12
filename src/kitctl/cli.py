@@ -251,6 +251,31 @@ def _validate(args: argparse.Namespace) -> int:
     return _exit_for(result)
 
 
+def _conformance(args: argparse.Namespace) -> int:
+    from kitctl import conformance
+    from kitctl.inventory import inventory
+
+    print(
+        "conformance runs harness CLIs (claude/codex list commands); they may update their "
+        "own caches or logs. kitctl changes no agent configuration.",
+        file=sys.stderr,
+    )
+    cwd = (args.repo or Path.cwd()).expanduser()
+    report = inventory([cwd] if args.repo else None)
+    result = _guard_any(conformance.run(report, cwd, health_checks=args.health_checks))
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        for check in result["checks"]:
+            count = "" if check["native_count"] is None else f" ({check['native_count']} listed)"
+            print(f"{check['check']:28} {check['status']}{count}")
+        for row in result["mismatches"]:
+            note = f"  [{row['note']}]" if row["note"] else ""
+            print(f"  {row['check']}: {row['item']} missing from {row['missing_from']}{note}")
+        print(f"{len(result['mismatches'])} differences, {result['unexplained']} unexplained.")
+    return EXIT_FINDINGS if result["unexplained"] else EXIT_OK
+
+
 def _init(args: argparse.Namespace) -> int:
     from kitctl.init import run_init
 
@@ -353,6 +378,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Run `claude/codex --version` (may update the harness's own caches or logs).",
     )
     doctor.set_defaults(handler=_doctor)
+
+    conform = commands.add_parser(
+        "conformance", help="Compare inventory with claude/codex list commands (runs them)."
+    )
+    conform.add_argument("--repo", type=Path, help="Repository to compare in (default: cwd).")
+    conform.add_argument(
+        "--health-checks",
+        action="store_true",
+        help="Also run `claude mcp list`, which starts and health-checks MCP servers.",
+    )
+    conform.add_argument("--json", action="store_true")
+    conform.set_defaults(handler=_conformance)
 
     validate = commands.add_parser("validate", help="Validate warehouse loadouts and primitives.")
     validate.add_argument("--warehouse", type=Path, help="Warehouse path (default: config).")

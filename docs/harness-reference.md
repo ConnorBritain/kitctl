@@ -34,6 +34,10 @@ sandbox probes are required before claiming installed support.
 
 ## Codex
 
+Links below were checked 2026-10-12 on a machine with full network access: each
+resolves (HTTP 200), and `developers.openai.com/codex/*` redirects to these
+`learn.chatgpt.com` pages, so they are the canonical locations (known issue 8 closed).
+
 - [Configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference):
   MCP servers use mcp_servers.<id>, with enabled_tools and disabled_tools;
   exclusions apply after inclusion. Plugin-provided servers have plugin-scoped
@@ -75,9 +79,9 @@ in the cloud build; Codex rows are unverified until `docs/followups.md` is worke
 | Claude | user | `skills/<dir>/.claude-plugin/plugin.json` (`<name>@skills-dir`) | plugin | Verified (docs) |
 | Claude | project | `.claude/settings.json`, `.mcp.json`, `.claude/{skills,agents,commands,rules,hooks}`, `CLAUDE.md`, `.claude/CLAUDE.md`, nested `CLAUDE.md` and `.claude/skills` | settings, mcp_server, hook, skill, agent, command, rules, instructions | Verified |
 | Claude | local | `.claude/settings.local.json`, `CLAUDE.local.md` | settings, instructions | Verified |
-| Codex | managed | `/etc/codex/*.toml`, `/etc/codex/skills` | settings, mcp_server, skill | Unverified |
-| Codex | user | `$CODEX_HOME` (default `~/.codex`): `config.toml` (`mcp_servers`, `projects.<path>.trust_level`), `hooks.json`, `AGENTS.md`, `AGENTS.override.md`, `rules/`, `plugins/`, legacy `skills/`; `~/.agents/skills` | settings, mcp_server, hook, instructions, rules, plugin, skill | Unverified |
-| Codex | project | `.codex/config.toml`, `.codex/hooks.json`, `AGENTS.md` (harness `shared`), `AGENTS.override.md`, `.agents/skills`, nested `AGENTS*.md` and `.agents/skills` | settings, mcp_server, hook, instructions, skill | Unverified |
+| Codex | managed | `/etc/codex/*.toml`, `/etc/codex/skills` | settings, mcp_server, skill | Documented; absent on test Mac |
+| Codex | user | `$CODEX_HOME` (default `~/.codex`): `config.toml` (`mcp_servers`, `projects.<path>.trust_level`, `plugins.<id>.enabled`), `hooks.json`, `AGENTS.md`, `AGENTS.override.md`, `rules/*.rules`, `skills/` and bundled `skills/.system/`, `plugins/cache/<marketplace>/<plugin>/<version>/.codex-plugin/plugin.json`; `~/.agents/skills` | settings, mcp_server, hook, instructions, rules, plugin, skill | Verified on Codex 0.153.4 (macOS); plugin enabled tables unconfirmed |
+| Codex | project | `.codex/config.toml`, `.codex/hooks.json`, `AGENTS.md` (harness `shared`), `AGENTS.override.md`, `.agents/skills`, nested `AGENTS*.md` and `.agents/skills` | settings, mcp_server, hook, instructions, skill | Documented; trusted-project loading not exercised |
 
 Phase 4 conformance will compare against `claude mcp list` (no JSON flag in 2.1.296;
 lists pending `.mcp.json` approvals) and `claude plugin list --json`, plus
@@ -97,10 +101,20 @@ Lines carry `type` (`user`, `assistant`, `attachment`, `system`, ...), `timestam
 | MCP call | `tool_use` named `mcp__<server>__<tool>` | server (and tool) |
 | Slash command | user text containing `<command-name>/name</command-name>` | command name |
 
-Codex session logs are documented as unstable. The adapter (unverified) reads
-`$CODEX_HOME/sessions/**/*.jsonl`: `session_meta`/`turn_context` give the cwd, and
-`function_call` names (`server__tool` or `mcp__server__tool`) and `mcp_tool_call_begin`
-events give MCP use. Unknown record types are counted and reported, never fatal.
+Codex session logs are documented as unstable. Observed on Codex 0.153.4: records
+`{type, timestamp, payload, metadata, ordinal}` under `$CODEX_HOME/sessions/**/*.jsonl` and
+`archived_sessions/`. `session_meta` and `turn_context` payloads carry `cwd`. MCP calls
+complete as `event_msg` with `payload.type == "item_completed"` and an `item` of type
+`McpToolCall` (`id`, `server`, `tool`, ...); kitctl counts these, deduplicated by id.
+`response_item` `function_call` records can carry a `namespace`; they are tallied but not
+counted until their ids are confirmed to match `McpToolCall` items. No explicit skill-use
+record has been observed. Unknown record types are counted and reported, never fatal.
+
+Native listings: `codex mcp list --json` returns an array of `{name, enabled,
+disabled_reason, transport, startup_timeout_sec, tool_timeout_sec, auth_status}` with no
+scope; `codex plugin list --json` lists installed plugin ids and enabled state.
+`claude mcp list` health-checks (starts) servers; `claude plugin list --json` lists ids,
+scope, and enabled state. `kitctl conformance` compares against these.
 
 ## Precedence used for shadowing
 

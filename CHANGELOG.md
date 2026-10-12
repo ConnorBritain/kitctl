@@ -2,6 +2,24 @@
 
 ## Unreleased (0.1.0 track)
 
+Fixes from the first real-environment run (macOS, 60 repos, Claude Code 2.1.86, Codex
+0.153.4):
+
+- Read-only enforcement: all writes go through one guarded helper; `doctor` reads
+  harness versions from install paths instead of running CLIs (`--probe` opts in); tests
+  fail on any write outside kitctl's dirs or any subprocess.
+- Codex: plugins from the `plugins/cache/<marketplace>/<plugin>/<version>` layout with
+  their skills and MCP servers, bundled `skills/.system`, MCP usage from `McpToolCall`
+  items, `archived_sessions`.
+- Git worktrees skipped by default; usage of names missing from the inventory is listed;
+  stale `.claude.json` projects flagged; hooks no longer reported as drift; disabled MCP
+  servers not flagged; `--no-descriptions`.
+- `kitctl conformance` compares with `claude`/`codex` list commands (it runs them;
+  `--health-checks` opts into `claude mcp list`).
+- `scripts/capture_fixtures.py` captures redacted config structure as test fixtures.
+- Warm inventory on large repos: 6.2 s to about 1 s on a 60-repo realistic benchmark
+  without reducing coverage (`inventory --timings` shows phases).
+
 - Links are first-class inventory entries with `link_target`; kitctl reads through them
   only into allowed roots. Windows junctions are handled; broken links are findings.
 - `hash_scheme` 2: CRLF/CR normalized for text, junk files skipped, NFC POSIX paths.
