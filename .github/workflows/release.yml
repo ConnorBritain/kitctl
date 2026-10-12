@@ -108,7 +108,7 @@ jobs:
           pipx uninstall kitctl
       - name: npm tarball (uv on PATH)
         run: |
-          npm install -g dist/kitctl-*.tgz
+          npm install -g ./dist/kitctl-*.tgz
           HOME="$SANDBOX" USERPROFILE="$SANDBOX" kitctl --version
           HOME="$SANDBOX" USERPROFILE="$SANDBOX" kitctl doctor
       - name: npm tarball (Python fallback, no uv)
@@ -204,7 +204,7 @@ jobs:
           if [ -n "$NPM_TOKEN" ]; then
             echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           fi
-          npm publish artifacts/kitctl-*.tgz --access public --provenance \
+          npm publish ./artifacts/kitctl-*.tgz --access public --provenance \
             --tag "${{ needs.verify.outputs.npm_tag }}"
 
   verify-public:

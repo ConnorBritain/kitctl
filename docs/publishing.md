@@ -46,7 +46,7 @@ CI, build, and install-smoke on all three OSes and skips every publish job.
 
   ```sh
   # from the release's artifacts (or a local build of the same tag)
-  npm publish kitctl-0.1.0-rc.1.tgz --access public --tag next
+  npm publish ./kitctl-0.1.0-rc.1.tgz --access public --tag next
   npm view kitctl dist-tags
   ```
 
