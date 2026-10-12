@@ -29,3 +29,21 @@ def test_nested_dirs_skip_nested_repos_and_pruned(tmp_path: Path) -> None:
     make_repo(repo / "sub")
     found = {p.relative_to(repo).as_posix() for p in nested_dirs(repo)}
     assert found == {"packages", "packages/api"}
+
+
+def test_same_directory_listed_twice_is_found_once(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path / "Code/app")
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(tmp_path / "Code", target_is_directory=True)
+    except OSError:
+        alias = tmp_path / "Code"
+    assert find_repos([tmp_path / "Code", alias]) == [repo]
+
+
+def test_init_detects_parents_once_on_case_insensitive_fs(tmp_path: Path) -> None:
+    from kitctl.init import _detect_parents
+
+    (tmp_path / "Code").mkdir()
+    (tmp_path / "src").mkdir()
+    assert _detect_parents(tmp_path) == [str(tmp_path / "Code"), str(tmp_path / "src")]

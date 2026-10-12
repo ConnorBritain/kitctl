@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -11,6 +12,16 @@ from kitctl import discover
 from kitctl import paths as kit_paths
 
 CANDIDATE_PARENTS = ("Code", "code", "src", "Projects", "projects", "dev", "repos", "git")
+
+
+def _detect_parents(home: Path) -> list[str]:
+    """Common repo parents under ``home``, using on-disk names (no case-insensitive dupes)."""
+    wanted = {name.casefold() for name in CANDIDATE_PARENTS}
+    try:
+        names = sorted(entry.name for entry in os.scandir(home) if entry.is_dir())
+    except OSError:
+        return []
+    return [str(home / name) for name in names if name.casefold() in wanted]
 
 
 def _ask(prompt: str, default: str) -> str:
@@ -39,9 +50,7 @@ def run_init(args: argparse.Namespace) -> int:
             print("Left existing config unchanged.")
             return 0
 
-    detected = [
-        str(paths.home / name) for name in CANDIDATE_PARENTS if (paths.home / name).is_dir()
-    ]
+    detected = _detect_parents(paths.home)
     parents = [str(p.expanduser()) for p in args.repo_parents or []]
     warehouse = str(args.warehouse.expanduser()) if args.warehouse else str(paths.default_warehouse)
     depth = args.depth if args.depth is not None else 3

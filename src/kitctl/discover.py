@@ -43,6 +43,17 @@ def _subdirs(directory: Path) -> list[Path]:
         return []
 
 
+def _identity(directory: Path) -> tuple[int, int] | str:
+    """Stable directory identity; case-insensitive filesystems give one dir many spellings."""
+    try:
+        info = os.stat(directory)
+    except OSError:
+        return os.path.realpath(directory)
+    if info.st_ino:
+        return (info.st_dev, info.st_ino)
+    return os.path.normcase(os.path.realpath(directory))
+
+
 def is_repo(directory: Path) -> bool:
     return (directory / ".git").exists()
 
@@ -50,15 +61,15 @@ def is_repo(directory: Path) -> bool:
 def find_repos(parents: Iterable[Path], max_depth: int = 3) -> list[Path]:
     """Directories containing ``.git`` up to ``max_depth`` below each parent; never nested."""
     repos: list[Path] = []
-    visited: set[str] = set()
+    visited: set[tuple[int, int] | str] = set()
     for parent in parents:
         frontier = [(parent.expanduser(), 0)]
         while frontier:
             directory, depth = frontier.pop()
-            real = os.path.realpath(directory)
-            if real in visited:
+            identity = _identity(directory)
+            if identity in visited:
                 continue
-            visited.add(real)
+            visited.add(identity)
             if is_repo(directory):
                 repos.append(directory)
                 continue
@@ -69,14 +80,14 @@ def find_repos(parents: Iterable[Path], max_depth: int = 3) -> list[Path]:
 
 def nested_dirs(repo: Path, max_depth: int = 6) -> Iterator[Path]:
     """Directories inside ``repo`` (excluding the root) where nested instructions may live."""
-    visited = {os.path.realpath(repo)}
+    visited = {_identity(repo)}
     frontier = [(child, 1) for child in _subdirs(repo)]
     while frontier:
         directory, depth = frontier.pop()
-        real = os.path.realpath(directory)
-        if real in visited or is_repo(directory):
+        identity = _identity(directory)
+        if identity in visited or is_repo(directory):
             continue
-        visited.add(real)
+        visited.add(identity)
         yield directory
         if depth < max_depth:
             frontier.extend((child, depth + 1) for child in _subdirs(directory))
