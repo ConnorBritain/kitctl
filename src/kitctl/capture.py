@@ -333,6 +333,17 @@ def _targets(tool: str, tool_input: dict[str, Any], cwd: Path) -> tuple[list[Pat
     return resolved, text
 
 
+def _fold(text: str) -> str:
+    """Shell text and paths compared with forward slashes (and case-folded on Windows)."""
+    text = text.replace("\\", "/")
+    return text.casefold() if os.name == "nt" else text
+
+
+def _norm(path: str) -> str:
+    """Comparable path: normalized separators and, on Windows, case."""
+    return os.path.normcase(os.path.normpath(path))
+
+
 def decide(payload: dict[str, Any], paths: Paths) -> tuple[str, str] | None:
     """("deny"|"ask", reason) for a PreToolUse payload, or None to allow."""
     tool = str(payload.get("tool_name", ""))
@@ -344,23 +355,27 @@ def decide(payload: dict[str, Any], paths: Paths) -> tuple[str, str] | None:
     if not owned and not shared:
         return None
     targets, text = _targets(tool, tool_input, cwd)
+    owned_keys = {_norm(path): path for path in owned}
+    shared_keys = {_norm(path): path for path in shared}
     for target in targets:
-        real = os.path.normpath(str(target))
-        if real in owned:
+        key = _norm(str(target))
+        real = owned_keys.get(key) or shared_keys.get(key) or str(target)
+        if key in owned_keys:
             return "deny", (
                 f"{real} is managed by kitctl. Change the warehouse copy and run `kitctl apply`, "
                 "or `kitctl eject` to stop managing it."
             )
-        if real in shared:
+        if key in shared_keys:
             return "ask", (
                 f"{real} contains entries managed by kitctl; editing them causes drift that "
                 "`kitctl apply` will report."
             )
     if text and _WRITE_WORDS.search(text):
         home = str(paths.home)
+        haystack = _fold(text)
         for path in sorted(owned):
             forms = {path, path.replace(home, "~", 1), path.replace(home, "$HOME", 1)}
-            if any(form in text for form in forms):
+            if any(_fold(form) in haystack for form in forms):
                 return "deny", (
                     f"This command looks like it modifies {path}, which kitctl manages. Change the "
                     "warehouse copy and run `kitctl apply` instead."
