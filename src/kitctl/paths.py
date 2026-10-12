@@ -31,6 +31,7 @@ class Paths:
     agents_home: Path
     kit_config_dir: Path
     kit_cache_dir: Path
+    kit_state_dir: Path
     default_warehouse: Path
     claude_managed: tuple[Path, ...]
     codex_managed: tuple[Path, ...]
@@ -89,6 +90,7 @@ def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> 
         local = _env_path(env, "LOCALAPPDATA") or home / "AppData" / "Local"
         kit_config = appdata / "kitctl"
         kit_cache = local / "kitctl" / "Cache"
+        kit_state = local / "kitctl" / "State"
     else:
         kit_config = (_env_path(env, "XDG_CONFIG_HOME") or home / ".config") / "kitctl"
         xdg_cache = _env_path(env, "XDG_CACHE_HOME")
@@ -98,6 +100,14 @@ def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> 
             kit_cache = home / "Library" / "Caches" / "kitctl"
         else:
             kit_cache = home / ".cache" / "kitctl"
+        # Ledger and recovery journal: durable, machine-local, never synced or committed.
+        xdg_state = _env_path(env, "XDG_STATE_HOME")
+        if xdg_state:
+            kit_state = xdg_state / "kitctl"
+        elif platform == "macos":
+            kit_state = home / "Library" / "Application Support" / "kitctl"
+        else:
+            kit_state = home / ".local" / "state" / "kitctl"
 
     claude_managed, codex_managed = _managed(platform, env)
     return Paths(
@@ -110,6 +120,7 @@ def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> 
         agents_home=home / ".agents",
         kit_config_dir=kit_config,
         kit_cache_dir=kit_cache,
+        kit_state_dir=kit_state,
         default_warehouse=home / "kits",
         claude_managed=claude_managed,
         codex_managed=codex_managed,

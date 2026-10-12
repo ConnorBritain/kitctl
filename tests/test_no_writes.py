@@ -41,7 +41,7 @@ def test_command_leaves_agent_config_untouched(
     harnesses: Path, tmp_path: Path, command: list[str]
 ) -> None:
     paths = resolve()
-    exclude = [paths.kit_config_dir, paths.kit_cache_dir]
+    exclude = [paths.kit_config_dir, paths.kit_cache_dir, paths.kit_state_dir]
     roots = [tmp_path]
     before = snapshot(roots, exclude)
     assert before, "fixture should populate the sandbox"
@@ -80,7 +80,7 @@ def test_warehouse_commands_write_only_kitctl_dirs_and_warehouse(
     warehouse = tmp_path / "home/kits"
     warehouse.mkdir()
     paths = resolve()
-    exclude = [paths.kit_config_dir, paths.kit_cache_dir, warehouse]
+    exclude = [paths.kit_config_dir, paths.kit_cache_dir, paths.kit_state_dir, warehouse]
     before = snapshot([tmp_path], exclude)
     with guarded(exclude) as violations:
         assert main(command) == 0

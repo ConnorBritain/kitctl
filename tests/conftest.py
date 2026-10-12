@@ -27,6 +27,7 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for name in (
         "XDG_CONFIG_HOME",
         "XDG_CACHE_HOME",
+        "XDG_STATE_HOME",
         "APPDATA",
         "LOCALAPPDATA",
         "CLAUDE_CODE_PLUGIN_CACHE_DIR",

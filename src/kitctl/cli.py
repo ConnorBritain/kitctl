@@ -161,6 +161,65 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("--json", action="store_true")
     validate.set_defaults(handler="read:validate")
 
+    def scope(command: argparse.ArgumentParser, capture: bool = False) -> None:
+        group = command.add_mutually_exclusive_group()
+        group.add_argument(
+            "--global",
+            dest="global_",
+            action="store_true",
+            help="User scope: the warehouse's core loadout.",
+        )
+        group.add_argument("--repo", type=Path, metavar="PATH", help="A repository with kit.toml.")
+        if capture:
+            group.add_argument("--capture", action="store_true", help="kitctl's own hooks.")
+            group.add_argument("--all", action="store_true", help="Everything kitctl owns.")
+
+    def mutation(command: argparse.ArgumentParser) -> None:
+        command.add_argument("--dry-run", action="store_true", help="Show the plan; write nothing.")
+        command.add_argument("--yes", action="store_true", help="Apply without a prompt.")
+
+    want = commands.add_parser(
+        "desired", help="Show what the warehouse says to install (read-only)."
+    )
+    want.add_argument("--repo", type=Path, metavar="PATH", help="A repository with kit.toml.")
+    want.add_argument("--warehouse", type=Path)
+    want.add_argument("--json", action="store_true")
+    want.set_defaults(handler="write:desired")
+
+    apply_cmd = commands.add_parser(
+        "apply", help="Install loadouts into Claude Code and Codex config (shows a diff first)."
+    )
+    scope(apply_cmd)
+    mutation(apply_cmd)
+    apply_cmd.add_argument(
+        "--replace",
+        action="store_true",
+        help="Take over existing entries that differ (purge restores the originals).",
+    )
+    apply_cmd.add_argument("--warehouse", type=Path)
+    apply_cmd.set_defaults(handler="write:apply")
+
+    status_cmd = commands.add_parser("status", help="What kitctl owns and whether it drifted.")
+    status_cmd.add_argument("--json", action="store_true")
+    status_cmd.set_defaults(handler="write:status")
+
+    purge_cmd = commands.add_parser(
+        "purge", help="Remove exactly what kitctl inserted, restoring what was there before."
+    )
+    scope(purge_cmd, capture=True)
+    mutation(purge_cmd)
+    purge_cmd.set_defaults(handler="write:purge")
+
+    eject_cmd = commands.add_parser(
+        "eject", help="Keep the config as plain native files and stop managing it."
+    )
+    mutation(eject_cmd)
+    eject_cmd.set_defaults(handler="write:eject")
+
+    recover_cmd = commands.add_parser("recover", help="Finish or undo an interrupted apply.")
+    recover_cmd.add_argument("--rollback", action="store_true", help="Undo instead of finish.")
+    recover_cmd.set_defaults(handler="write:recover")
+
     args = parser.parse_args(argv)
     module, name = args.handler.split(":")
     handler = getattr(importlib.import_module(f"kitctl.commands.{module}"), name)

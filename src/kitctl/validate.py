@@ -55,7 +55,24 @@ PRIMITIVE_FIELDS = {
     "harnesses": list,
     "source": dict,
     "content_hash": str,
+    "hook": dict,
 }
+HOOK_FIELDS = {"event": str, "matcher": str, "script": str, "command": str, "timeout": int}
+HOOK_EVENTS = {
+    "PreToolUse",
+    "PostToolUse",
+    "PermissionRequest",
+    "UserPromptSubmit",
+    "SessionStart",
+    "SessionEnd",
+    "Stop",
+    "SubagentStop",
+    "PreCompact",
+    "Notification",
+}
+# A marketplace plugin id (``name@marketplace``) in a loadout's plugins list; anything else
+# in that list names a warehouse plugin primitive.
+PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SOURCE_FIELDS = {"origin": str, "path": str, "adopted_at": str, "original_hash": str}
 HARNESSES = {"claude", "codex"}
 
@@ -140,10 +157,49 @@ class _Validator:
                         self.error(
                             document, "source.path must be relative without '..'", "path-traversal"
                         )
+                if kind == "hook":
+                    self.hook(document, item, data.get("hook"))
+                elif "hook" in data:
+                    self.error(
+                        document, "[hook] is only valid for hook primitives", "unknown-field"
+                    )
                 if kind == "mcp" and not (item / "server.json").is_file():
                     self.error(document, "MCP primitive is missing server.json", "missing-file")
                 known.add((kind, item.name))
         return known
+
+    def hook(self, document: Path, item: Path, spec: Any) -> None:
+        if spec is None:
+            self.findings.append(
+                Finding(
+                    "warning",
+                    "hook-not-compilable",
+                    str(document),
+                    "Hook primitive has no [hook] table (event, matcher, script or command); "
+                    "apply can't install it until one is added",
+                )
+            )
+            return
+        if not isinstance(spec, dict):
+            self.error(document, "[hook] must be a table", "wrong-type")
+            return
+        for key in sorted(set(spec) - set(HOOK_FIELDS)):
+            self.error(document, f"Unknown field hook.{key}", "unknown-field")
+        for key, expected in HOOK_FIELDS.items():
+            if key in spec and (not isinstance(spec[key], expected) or isinstance(spec[key], bool)):
+                self.error(document, f"hook.{key} must be {expected.__name__}", "wrong-type")
+        if spec.get("event") not in HOOK_EVENTS:
+            self.error(document, f"hook.event must be one of {', '.join(sorted(HOOK_EVENTS))}")
+        script = spec.get("script")
+        if isinstance(script, str):
+            if not _safe_relative(script):
+                self.error(document, "hook.script must be relative without '..'", "path-traversal")
+            elif not (item / "files" / script).is_file():
+                self.error(
+                    document, f"hook.script {script!r} not found under files/", "missing-file"
+                )
+        elif not isinstance(spec.get("command"), str):
+            self.error(document, "[hook] needs script or command", "missing-field")
 
     def triage(self) -> int:
         path = self.warehouse / "triage.toml"
@@ -192,6 +248,8 @@ class _Validator:
                 for reference in data.get(key, []):
                     if not isinstance(reference, str):
                         continue
+                    if key == "plugins" and PLUGIN_ID.match(reference):
+                        continue  # marketplace plugin, resolved by the harness
                     ref_kind, _, ref_name = reference.rpartition(":")
                     if ref_kind and ref_kind != kind:
                         self.error(document, f"{key} entry {reference!r} has kind {ref_kind!r}")
