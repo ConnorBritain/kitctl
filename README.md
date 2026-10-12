@@ -2,7 +2,8 @@
 
 kitctl (pronounced "kit control"; colloquially "kit") inventories the skills,
 MCP configuration, hooks, and plugins used by coding agents. The planned compiler
-manages named **loadouts** from a separate private each harness's native configuration with an ownership ledger.
+manages named **loadouts** from a separate private warehouse and writes each
+harness's native configuration with an ownership ledger.
 The planned default warehouse location is `~/kits`; setup will ask which parent
 directories contain your repositories.
 
