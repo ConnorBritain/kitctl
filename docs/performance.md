@@ -17,7 +17,27 @@ of Python startup. "Cold" means no kitctl cache. Baselines live in `performance.
 | `usage --json`, warm (no new data) | 167 ms | 22 MB | < 500 ms: met |
 | `report --format html`, warm | 1.22 s | 27 MB | none |
 
-## Where warm inventory time goes
+## Real environment: macOS (second run, 2026-10-12)
+
+The user's Mac, 58 repositories, 485 inventory items, kitctl 0.1.0.dev0 run through `uvx`
+inside a write sandbox. Wall times include about 0.71 s of uvx, sandbox, and startup
+overhead (the measured `kitctl --version` time in that setup); an installed `kitctl` (uv
+tool or pipx) avoids most of it.
+
+| Step | Wall time | Phases (from `--timings`) |
+|---|---:|---|
+| `inventory`, first pass (44.6 MB hashed) | 7.27 s | Codex user config 5.3 s, nested walk 1.2 s |
+| `inventory`, warm (median of 3) | 0.96 s | 0.49 s total: nested walk 318 ms, Codex user 89 ms, Claude user 26 ms |
+| `usage`, first pass | 16.1 s | reads all session logs once |
+| `usage`, warm | 0.55 s | |
+| `report --format html` | 1.82 s | |
+| `doctor` | 0.93 s | |
+
+So warm inventory spends about 0.5 s in kitctl itself, on the 500 ms budget line. The first
+pass is dominated by hashing the Codex plugin cache once; later passes reuse the stat-keyed
+cache (3,951 cached files, 0 hashed).
+
+## Where warm inventory time goes (synthetic load)
 
 `kitctl inventory --timings` prints a per-phase breakdown. On this workload: about half is
 walking repositories for nested `CLAUDE.md`/`AGENTS.md`/`.claude`/`.agents` (default depth
