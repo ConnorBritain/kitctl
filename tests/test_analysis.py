@@ -134,3 +134,67 @@ def test_usage_status_and_matching() -> None:
     ]
     statuses = [u["status"] for u in analysis.usage_by_entry(entries, records, 60, now)]
     assert statuses == ["active", "active", "stale", "unused", "n/a", "active"]
+
+
+def test_untracked_and_plugin_rollup_and_categories() -> None:
+    now = datetime(2026, 10, 12, tzinfo=UTC)
+    entries = [
+        entry("skill", "s", harness="codex"),
+        entry("plugin", "tools@m", harness="codex"),
+        entry("mcp_server", "tana", "plugin", harness="codex", provided_by="tools@m"),
+    ]
+    records = [
+        {
+            "harness": "codex",
+            "kind": "mcp_server",
+            "name": "tana",
+            "repo": None,
+            "calls": 5,
+            "last_used": "2026-10-10T00:00:00Z",
+        }
+    ]
+    usage = analysis.usage_by_entry(entries, records, 60, now)
+    assert [u["status"] for u in usage] == ["untracked", "active", "active"]
+    assert usage[1]["calls"] == 5
+    grouped = analysis.unmatched_usage(
+        [
+            {
+                "harness": "claude",
+                "kind": "agent",
+                "name": "Explore",
+                "repo": "/a",
+                "calls": 2,
+                "last_used": "2026-10-01",
+            },
+            {
+                "harness": "claude",
+                "kind": "agent",
+                "name": "Explore",
+                "repo": "/b",
+                "calls": 3,
+                "last_used": "2026-10-02",
+            },
+            {
+                "harness": "codex",
+                "kind": "mcp_server",
+                "name": "codex_apps",
+                "repo": None,
+                "calls": 9,
+                "last_used": "2026-10-03",
+            },
+            {
+                "harness": "claude",
+                "kind": "mcp_server",
+                "name": "old-server",
+                "repo": None,
+                "calls": 1,
+                "last_used": "2026-01-01",
+            },
+        ]
+    )
+    summary = {(g["name"], g["category"], g["calls"], len(g["repos"])) for g in grouped}
+    assert summary == {
+        ("Explore", "built-in", 5, 2),
+        ("codex_apps", "connector", 9, 0),
+        ("old-server", "not installed", 1, 0),
+    }

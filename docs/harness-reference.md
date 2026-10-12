@@ -106,9 +106,11 @@ Codex session logs are documented as unstable. Observed on Codex 0.153.4: record
 `archived_sessions/`. `session_meta` and `turn_context` payloads carry `cwd`. MCP calls
 complete as `event_msg` with `payload.type == "item_completed"` and an `item` of type
 `McpToolCall` (`id`, `server`, `tool`, ...); kitctl counts these, deduplicated by id.
-`response_item` `function_call` records can carry a `namespace`; they are tallied but not
-counted until their ids are confirmed to match `McpToolCall` items. No explicit skill-use
-record has been observed. Unknown record types are counted and reported, never fatal.
+`response_item` `function_call` records can carry a `namespace` (`mcp__<server>` for MCP);
+on a real 0.153.4 install every such call had a matching `McpToolCall` completion, and some
+completions had no function call, so kitctl counts completions only (namespaced calls are
+tallied for diagnostics). No skill, agent, or command invocation record has been observed,
+so those Codex kinds are reported as `untracked` rather than unused. Unknown record types are counted and reported, never fatal.
 
 Native listings: `codex mcp list --json` returns an array of `{name, enabled,
 disabled_reason, transport, startup_timeout_sec, tool_timeout_sec, auth_status}` with no

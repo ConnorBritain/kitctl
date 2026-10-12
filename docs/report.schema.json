@@ -440,14 +440,46 @@
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "harness",
               "kind",
               "name",
-              "repo",
+              "category",
               "calls",
-              "last_used"
-            ]
+              "last_used",
+              "repos"
+            ],
+            "properties": {
+              "harness": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "category": {
+                "enum": [
+                  "built-in",
+                  "connector",
+                  "not installed"
+                ]
+              },
+              "calls": {
+                "type": "integer"
+              },
+              "last_used": {
+                "type": "string"
+              },
+              "repos": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -514,6 +546,7 @@
             "active",
             "stale",
             "unused",
+            "untracked",
             "n/a"
           ]
         },

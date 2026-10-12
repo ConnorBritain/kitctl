@@ -20,6 +20,9 @@ Runner = Callable[[list[str], Path], tuple[int, str]]
 # Known listing gaps: differences that are expected, not kitctl bugs.
 GAP_PLUGIN_MCP = "claude mcp list omits some plugin-provided servers"
 GAP_NO_SCOPE = "native listing has no scope field; matched by name only"
+GAP_CODEX_PLUGIN_MCP = "codex mcp list omits plugin-provided servers"
+GAP_STALE_CACHE = "cached but not installed per `codex plugin list`; cleanup candidate"
+EXPLAINED = frozenset({GAP_PLUGIN_MCP, GAP_CODEX_PLUGIN_MCP, GAP_STALE_CACHE})
 
 
 def subprocess_runner(command: list[str], cwd: Path, timeout: float = 60.0) -> tuple[int, str]:
@@ -115,7 +118,9 @@ def _compare(
     ours: Iterable[str],
     note: str = "",
     explained_ours: Iterable[str] = (),
+    explanation: str = GAP_PLUGIN_MCP,
 ) -> list[dict[str, str]]:
+    """Differences both ways; ours-only names in ``explained_ours`` get ``explanation``."""
     native_set, ours_set, explained = set(native), set(ours), set(explained_ours)
     rows = []
     for name in sorted(native_set - ours_set):
@@ -126,7 +131,7 @@ def _compare(
                 "check": check,
                 "item": name,
                 "missing_from": "native",
-                "note": GAP_PLUGIN_MCP if name in explained else note,
+                "note": explanation if name in explained else note,
             }
         )
     return rows
@@ -172,7 +177,19 @@ def run(
     else:
         native = parse_codex_mcp_list(out)
         record("codex mcp", command, "ok" if code == 0 else f"exit {code}", len(native))
-        results["mismatches"] += _compare("codex mcp", native, codex_mcp, GAP_NO_SCOPE)
+        codex_plugin_mcp = {
+            e["name"]
+            for e in entries
+            if e["kind"] == "mcp_server" and e["harness"] == "codex" and e["scope"] == "plugin"
+        }
+        results["mismatches"] += _compare(
+            "codex mcp",
+            native,
+            codex_mcp,
+            GAP_NO_SCOPE,
+            explained_ours=codex_plugin_mcp,
+            explanation=GAP_CODEX_PLUGIN_MCP,
+        )
         codex_plugins = {
             e["name"] for e in entries if e["kind"] == "plugin" and e["harness"] == "codex"
         }
@@ -180,8 +197,14 @@ def run(
         code, out = runner(command, cwd)
         native_plugins = parse_plugin_list(out)
         record("codex plugins", command, "ok" if code == 0 else f"exit {code}", len(native_plugins))
+        # Every cached plugin we list but Codex doesn't is a stale cache entry.
         results["mismatches"] += _compare(
-            "codex plugins", native_plugins, codex_plugins, GAP_NO_SCOPE
+            "codex plugins",
+            native_plugins,
+            codex_plugins,
+            GAP_NO_SCOPE,
+            explained_ours=codex_plugins - set(native_plugins),
+            explanation=GAP_STALE_CACHE,
         )
 
     if health_checks:
@@ -212,6 +235,6 @@ def run(
             ["claude", "mcp", "list"],
             "skipped: starts MCP servers; pass --health-checks to run it",
         )
-    unexplained = [m for m in results["mismatches"] if m["note"] != GAP_PLUGIN_MCP]
+    unexplained = [m for m in results["mismatches"] if m["note"] not in EXPLAINED]
     results["unexplained"] = len(unexplained)
     return results

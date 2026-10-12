@@ -16,6 +16,61 @@ Entry = dict[str, Any]
 COMPARABLE = frozenset({"skill", "agent", "command", "rules", "mcp_server"})
 DUPLICABLE = COMPARABLE | {"instructions", "hook"}
 USAGE_KINDS = frozenset({"skill", "agent", "command", "mcp_server", "plugin"})
+# (harness, kind) pairs whose usage the session logs don't record: status "untracked".
+UNTRACKED = frozenset({("codex", "skill"), ("codex", "agent"), ("codex", "command")})
+BUILTIN_AGENTS = frozenset(
+    {
+        "general-purpose",
+        "Explore",
+        "Plan",
+        "statusline-setup",
+        "claude-code-guide",
+        "output-style-setup",
+        "default",
+    }
+)
+BUILTIN_COMMANDS = frozenset(
+    {
+        "add-dir",
+        "agents",
+        "bug",
+        "clear",
+        "compact",
+        "config",
+        "context",
+        "cost",
+        "doctor",
+        "effort",
+        "exit",
+        "export",
+        "fast",
+        "help",
+        "hooks",
+        "ide",
+        "init",
+        "login",
+        "logout",
+        "mcp",
+        "memory",
+        "model",
+        "permissions",
+        "plugin",
+        "pr-comments",
+        "release-notes",
+        "resume",
+        "review",
+        "rewind",
+        "security-review",
+        "status",
+        "statusline",
+        "terminal-setup",
+        "todos",
+        "upgrade",
+        "usage",
+        "vim",
+    }
+)
+CONNECTOR_PREFIXES = ("claude_ai_", "claude-in-chrome", "codex_apps")
 LAUNCHERS = frozenset(
     {
         "npx",
@@ -254,19 +309,34 @@ def usage_by_entry(
             index[(record["harness"], "skill", record["name"])].append(record)
         if record["kind"] in {"skill", "agent", "command"} and ":" in record["name"]:
             index[(record["harness"], "plugin", record["name"].partition(":")[0])].append(record)
+    plugin_servers: dict[str, set[str]] = defaultdict(set)
+    for entry in entries:
+        if entry["kind"] == "mcp_server" and entry["provided_by"]:
+            plugin_servers[entry["provided_by"]].add(entry["name"])
     results = []
     for entry in entries:
+        harness = "claude" if entry["harness"] == "shared" else entry["harness"]
+        if (harness, entry["kind"]) in UNTRACKED:
+            results.append(
+                {"status": "untracked", "calls": 0, "last_used": "", "repos": [], "records": {}}
+            )
+            continue
         if entry["kind"] not in USAGE_KINDS:
             results.append(
                 {"status": "n/a", "calls": 0, "last_used": "", "repos": [], "records": {}}
             )
             continue
-        harness = "claude" if entry["harness"] == "shared" else entry["harness"]
         matched = [
             record
             for name in _usage_names(entry)
             for record in index.get((harness, entry["kind"], name), [])
         ]
+        if entry["kind"] == "plugin":  # a plugin is used when its MCP servers are
+            matched += [
+                record
+                for server in plugin_servers.get(entry["name"], ())
+                for record in index.get((harness, "mcp_server", server), [])
+            ]
         if entry["repo"]:
             matched = [r for r in matched if r["repo"] == entry["repo"]]
         unique = {_record_id(r): r for r in matched}
@@ -283,6 +353,41 @@ def usage_by_entry(
             }
         )
     return results
+
+
+def usage_category(harness: str, kind: str, name: str) -> str:
+    if harness == "claude" and (
+        (kind == "agent" and name in BUILTIN_AGENTS)
+        or (kind == "command" and name in BUILTIN_COMMANDS)
+    ):
+        return "built-in"
+    if kind == "mcp_server" and name.startswith(CONNECTOR_PREFIXES):
+        return "connector"
+    return "not installed"
+
+
+def unmatched_usage(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group usage that matches no current entry by name, with a category."""
+    groups: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for record in records:
+        key = (record["harness"], record["kind"], record["name"])
+        group = groups.setdefault(
+            key,
+            {
+                "harness": key[0],
+                "kind": key[1],
+                "name": key[2],
+                "category": usage_category(*key),
+                "calls": 0,
+                "last_used": "",
+                "repos": [],
+            },
+        )
+        group["calls"] += record["calls"]
+        group["last_used"] = max(group["last_used"], record["last_used"])
+        if record["repo"] and record["repo"] not in group["repos"]:
+            group["repos"].append(record["repo"])
+    return sorted(groups.values(), key=lambda g: (-g["calls"], g["harness"], g["name"]))
 
 
 def analyze(entries: list[Entry], records: list[dict[str, Any]], stale_days: int) -> dict[str, Any]:
@@ -313,16 +418,10 @@ def analyze(entries: list[Entry], records: list[dict[str, Any]], stale_days: int
         )
     per_entry = usage_by_entry(entries, records, stale_days)
     matched = {key for usage in per_entry for key in usage["records"]}
-    unmatched = sorted(
-        (r for r in records if _record_id(r) not in matched),
-        key=lambda r: (-r["calls"], r["harness"], r["kind"], r["name"]),
-    )
+    unmatched = unmatched_usage([r for r in records if _record_id(r) not in matched])
     return {
         "stale_days": stale_days,
-        "unmatched_usage": [
-            {k: r[k] for k in ("harness", "kind", "name", "repo", "calls", "last_used")}
-            for r in unmatched
-        ],
+        "unmatched_usage": unmatched,
         "drift": found_drift,
         "duplicates": found_dupes,
         "shadowing": found_shadow,

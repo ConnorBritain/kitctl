@@ -94,7 +94,7 @@ def matrix(entries: list[dict[str, Any]], per_entry: list[dict[str, Any]]) -> li
         row["calls"] = sum(row["_records"].values())
         row["last_used"] = max(row["last_used"], usage["last_used"])
         row["repos_used"] = sorted(set(row["repos_used"]) | set(usage["repos"]))
-        rank = {"active": 3, "stale": 2, "unused": 1, "n/a": 0}
+        rank = {"active": 4, "stale": 3, "unused": 2, "untracked": 1, "n/a": 0}
         if rank[usage["status"]] > rank[row["status"]]:
             row["status"] = usage["status"]
     for row in rows.values():
@@ -165,6 +165,11 @@ def render_markdown(report: dict[str, Any]) -> str:
     out = ["# kitctl report", ""]
     out += [f"- **{label}:** {_md_escape(value)}" for label, value in _summary(report)]
     out += ["", "kitctl is read-only toward agent configuration; nothing was changed.", ""]
+    out += [
+        "Status: active (used within the stale window), stale, unused (tracked but never "
+        "seen), untracked (the harness logs don't record this kind, e.g. Codex skills), n/a.",
+        "",
+    ]
     out += ["## Findings", ""]
     by_severity: dict[str, list[dict[str, str]]] = defaultdict(list)
     for finding in report["findings"]:
@@ -225,8 +230,8 @@ def render_markdown(report: dict[str, Any]) -> str:
     out += ["", "## Used but not in the current inventory", ""]
     out += ["Removed items, harness built-ins, or claude.ai connectors still get used:", ""]
     out += [
-        f"- {u['harness']} {u['kind']} **{_md_escape(u['name'])}**: {u['calls']} calls, "
-        f"last {u['last_used'][:10]}" + (f" ({Path(u['repo']).name})" if u["repo"] else "")
+        f"- {u['harness']} {u['kind']} **{_md_escape(u['name'])}** ({u['category']}): "
+        f"{u['calls']} calls in {len(u['repos']) or 'no'} repo(s), last {u['last_used'][:10]}"
         for u in result["unmatched_usage"][:50]
     ] or ["None."]
     out += ["", "## Usage sources", ""]
@@ -338,7 +343,8 @@ def render_html(report: dict[str, Any]) -> str:
         (
             "Used but not in inventory",
             [
-                f"{u['harness']} {u['kind']} {u['name']}: {u['calls']} calls"
+                f"{u['harness']} {u['kind']} {u['name']} ({u['category']}): {u['calls']} calls"
+                f" in {len(u['repos']) or 'no'} repo(s)"
                 for u in result["unmatched_usage"][:50]
             ],
         ),

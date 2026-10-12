@@ -15,9 +15,12 @@ result here (date, version, outcome). Each item names what to update afterwards.
 
 ## Still open (needs runbook v2)
 
-- [ ] Do namespaced `function_call` `call_id`s match `McpToolCall` `item.id`s? If yes,
-      count namespaced calls from older logs too (`src/kitctl/usage/codex.py`).
-- [ ] Does `config.toml` record plugin enabled state as `[plugins."<id>"] enabled`?
+- [x] (macOS v2) Every `mcp__<server>` namespaced `function_call` matched an
+      `McpToolCall` completion by id, and completions also exist without a function call
+      (59 completions vs 30 MCP calls in the sample). Counting completions is correct.
+- [x] (macOS v2) `[plugins."<id>"] enabled` tables exist but are sparse (18 of 39 installed);
+      `codex plugin list --json` is authoritative for what is installed. The cache can hold
+      plugins that are no longer installed; conformance labels them as cleanup candidates.
 - [ ] Windows run (paths, junctions, Codex locations on Windows).
 
 Answered by the 2026-10-12 macOS run (Claude Code 2.1.86, Codex 0.153.4) are checked

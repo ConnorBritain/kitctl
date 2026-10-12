@@ -149,6 +149,9 @@ def _plugin(c: Collector, root: Path, pid: str, enabled: bool | None, versions: 
     }
     if enabled is not None:
         meta["enabled"] = enabled
+    # The cache can hold plugins Codex no longer lists as installed; only `codex plugin
+    # list` knows (see `kitctl conformance`). Config tables are sparse, so stay neutral.
+    meta["installed"] = "unknown"
     c.add(
         Entry(
             "plugin",
