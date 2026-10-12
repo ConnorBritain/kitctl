@@ -19,6 +19,7 @@ class UserConfig:
     repo_parents: list[str] = field(default_factory=list)
     warehouse: str = ""
     discovery_depth: int = 3
+    nested_depth: int = 6
     stale_days: int = 60
     include_worktrees: bool = False
     export_descriptions: bool = True
@@ -36,6 +37,7 @@ _TYPES: dict[str, type] = {
     "repo_parents": list,
     "warehouse": str,
     "discovery_depth": int,
+    "nested_depth": int,
     "stale_days": int,
     "include_worktrees": bool,
     "export_descriptions": bool,
@@ -64,6 +66,8 @@ def parse(text: str, source: str = "config") -> UserConfig:
     config = UserConfig(**data)
     if not 0 <= config.discovery_depth <= 10:
         raise ConfigError(f"{source}: discovery_depth must be between 0 and 10")
+    if not 0 <= config.nested_depth <= 12:
+        raise ConfigError(f"{source}: nested_depth must be between 0 and 12")
     return config
 
 
@@ -106,6 +110,7 @@ def dumps(config: UserConfig) -> str:
         f"repo_parents = {_toml_value(config.repo_parents)}",
         f"warehouse = {_toml_value(config.warehouse)}",
         f"discovery_depth = {config.discovery_depth}",
+        f"nested_depth = {config.nested_depth}",
         f"stale_days = {config.stale_days}",
         f"include_worktrees = {_toml_value(config.include_worktrees)}",
         f"export_descriptions = {_toml_value(config.export_descriptions)}",

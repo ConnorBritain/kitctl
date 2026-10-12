@@ -33,6 +33,8 @@ CONFIG_SUFFIXES = frozenset(
 REDACTED = "[REDACTED]"
 
 _TEXT = tuple((kind, re.compile(pattern), config) for kind, pattern, config in _RULES)
+_ANY = re.compile("|".join(f"(?:{pattern})" for _, pattern, _ in _RULES))
+_MIN_LENGTH = 15  # shorter than the shortest pattern (e.g. "xoxb-" plus 10 characters)
 _BYTES = tuple((kind, re.compile(pattern.encode()), config) for kind, pattern, config in _RULES)
 
 
@@ -59,6 +61,8 @@ def find_bytes(data: bytes, config_context: bool = True) -> list[str]:
 
 
 def redact(text: str) -> tuple[str, list[str]]:
+    if len(text) < _MIN_LENGTH or not _ANY.search(text):
+        return text, []
     kinds: list[str] = []
     for kind, rule, _ in _TEXT:
         text, count = rule.subn(REDACTED, text)

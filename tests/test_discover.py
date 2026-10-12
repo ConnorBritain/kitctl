@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from kitctl.discover import find_repos, nested_dirs
+from kitctl.discover import find_repos, nested_markers
 
 
 def make_repo(path: Path) -> Path:
@@ -22,13 +22,22 @@ def test_finds_repos_to_depth_and_prunes(tmp_path: Path) -> None:
     assert code / "org/deep/er/c" in find_repos([code], max_depth=4)
 
 
-def test_nested_dirs_skip_nested_repos_and_pruned(tmp_path: Path) -> None:
+def test_nested_markers_skip_nested_repos_pruned_and_deep(tmp_path: Path) -> None:
     repo = make_repo(tmp_path / "repo")
-    (repo / "packages/api").mkdir(parents=True)
+    (repo / "packages/api/.claude").mkdir(parents=True)
+    (repo / "packages/api/CLAUDE.md").write_text("x")
+    (repo / "packages/web").mkdir(parents=True)
+    (repo / "packages/web/AGENTS.md").write_text("x")
     (repo / "node_modules/x").mkdir(parents=True)
-    make_repo(repo / "sub")
-    found = {p.relative_to(repo).as_posix() for p in nested_dirs(repo)}
-    assert found == {"packages", "packages/api"}
+    (repo / "node_modules/x/CLAUDE.md").write_text("x")
+    sub = make_repo(repo / "sub")
+    (sub / "CLAUDE.md").write_text("x")
+    deep = repo / "a/b/c/d/e"
+    deep.mkdir(parents=True)
+    (deep / "CLAUDE.md").write_text("x")
+    found = {n.relative: set(n.markers) for n in nested_markers(repo, max_depth=4)}
+    assert found == {"packages/api": {"CLAUDE.md", ".claude"}, "packages/web": {"AGENTS.md"}}
+    assert "a/b/c/d/e" in {n.relative for n in nested_markers(repo, max_depth=5)}
 
 
 def test_same_directory_listed_twice_is_found_once(tmp_path: Path) -> None:

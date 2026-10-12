@@ -16,6 +16,11 @@ HASH_SCHEME = 2
 
 JUNK_FILES = frozenset({".DS_Store", "Thumbs.db", "desktop.ini"})
 JUNK_DIRS = frozenset({".git", "__pycache__"})
+# Dependency and tool-cache directories inside skills and plugins: not authored content,
+# often huge, and reinstallable. Skipped when walking and hashing (scheme 2).
+VENDORED_DIRS = frozenset(
+    {"node_modules", ".venv", "venv", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
+)
 JUNK_SUFFIXES = (".pyc",)
 _SNIFF = 8192
 _CHUNK = 65536
@@ -23,7 +28,7 @@ _CHUNK = 65536
 
 def is_junk(name: str, is_dir: bool) -> bool:
     if is_dir:
-        return name in JUNK_DIRS
+        return name in JUNK_DIRS or name in VENDORED_DIRS
     return name in JUNK_FILES or name.endswith(JUNK_SUFFIXES)
 
 
@@ -88,6 +93,7 @@ class HashCache:
         self.location = location
         self._entries: dict[str, list[object]] = {}
         self.memo: dict[str, dict[str, str]] = {}  # digest -> derived metadata (frontmatter)
+        self.hits = self.misses = self.bytes_hashed = 0
         self._dirty = False
         if location and location.is_file():
             try:
@@ -103,7 +109,10 @@ class HashCache:
         key = [stat.st_size, stat.st_mtime_ns, getattr(stat, "st_ino", 0)]
         cached = self._entries.get(str(path))
         if cached and cached[:3] == key:
+            self.hits += 1
             return str(cached[3])
+        self.misses += 1
+        self.bytes_hashed += stat.st_size
         value = file_digest(path)
         self._entries[str(path)] = [*key, value]
         self._dirty = True

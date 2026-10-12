@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from kitctl.collect import Collector
+from kitctl.discover import Nested
 from kitctl.hashing import HASH_SCHEME
 from kitctl.model import Entry
 from kitctl.paths import Paths
@@ -252,7 +253,7 @@ def collect_user(c: Collector, paths: Paths) -> set[str]:
     return trusted
 
 
-def collect_project(c: Collector, repo: Path, nested: list[Path], trusted: set[str]) -> None:
+def collect_project(c: Collector, repo: Path, nested: list[Nested], trusted: set[str]) -> None:
     codex_dir, _ = c.reach(repo, ".codex", HARNESS, "project", repo)
     if codex_dir is not None and codex_dir.is_dir():
         path, link = c.reach(codex_dir, "config.toml", HARNESS, "project", repo)
@@ -271,17 +272,11 @@ def collect_project(c: Collector, repo: Path, nested: list[Path], trusted: set[s
     for name in INSTRUCTIONS:
         _instructions(c, repo, name, "project", repo, "shared" if name == "AGENTS.md" else HARNESS)
     _skills(c, repo, ".agents/skills", "project", repo)
-    for directory in nested:
-        relative = directory.relative_to(repo).as_posix()
+    for nested_dir in nested:
+        relative = nested_dir.relative
         for name in INSTRUCTIONS:
-            if (directory / name).is_file():
-                _instructions(
-                    c,
-                    repo,
-                    f"{relative}/{name}",
-                    "project",
-                    repo,
-                    "shared" if name == "AGENTS.md" else HARNESS,
-                )
-        if (directory / ".agents" / "skills").is_dir():
+            if name in nested_dir.markers:
+                harness = "shared" if name == "AGENTS.md" else HARNESS
+                _instructions(c, repo, f"{relative}/{name}", "project", repo, harness)
+        if ".agents" in nested_dir.markers and (nested_dir.path / ".agents" / "skills").is_dir():
             _skills(c, repo, f"{relative}/.agents/skills", "project", repo, {"nested": relative})

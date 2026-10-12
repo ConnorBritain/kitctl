@@ -85,11 +85,19 @@ def _inventory(args: argparse.Namespace) -> int:
     from kitctl.inventory import inventory
 
     try:
+        timings: dict[str, float] | None = {} if args.timings else None
         report = _guard(
             inventory(
-                args.roots, use_cache=not args.no_cache, include_worktrees=args.include_worktrees
+                args.roots,
+                use_cache=not args.no_cache,
+                include_worktrees=args.include_worktrees,
+                timings=timings,
             )
         )
+        if timings is not None:
+            for name, value in timings.items():
+                shown = f"{value * 1000:8.1f} ms" if isinstance(value, float) else f"{value:8d}"
+                print(f"timing {name:16} {shown}", file=sys.stderr)
         report = _descriptions(report, args)
     except (OSError, ValueError, ConfigError) as error:
         print(f"kitctl: {error}", file=sys.stderr)
@@ -308,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     scan.add_argument("--json", action="store_true", help="Print the report as JSON.")
     scan.add_argument("--no-cache", action="store_true", help="Don't use the hash cache.")
+    scan.add_argument("--timings", action="store_true", help="Print per-phase timings to stderr.")
     _common(scan, descriptions=True)
     scan.set_defaults(handler=_inventory)
 

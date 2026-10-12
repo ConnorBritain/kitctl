@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from kitctl.collect import Collector
+from kitctl.discover import Nested
 from kitctl.hashing import HASH_SCHEME
 from kitctl.model import Entry
 from kitctl.paths import Paths
@@ -24,7 +25,6 @@ HARNESS = "claude"
 VERIFIED_VERSIONS = ("2.1.86", "2.1.296")
 
 PROJECT_INSTRUCTIONS = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
-NESTED_INSTRUCTIONS = ("CLAUDE.md",)
 COMPONENT_DIRS = (("agents", "agent"), ("commands", "command"), ("rules", "rules"))
 
 
@@ -392,7 +392,7 @@ def collect_user(c: Collector, paths: Paths) -> None:
     _plugins(c, paths)
 
 
-def collect_project(c: Collector, repo: Path, nested: list[Path]) -> None:
+def collect_project(c: Collector, repo: Path, nested: list[Nested]) -> None:
     claude_dir, _ = c.reach(repo, ".claude", HARNESS, "project", repo)
     if claude_dir is not None and claude_dir.is_dir():
         for name, scope in (("settings.json", "project"), ("settings.local.json", "local")):
@@ -417,12 +417,11 @@ def collect_project(c: Collector, repo: Path, nested: list[Path]) -> None:
     for relative in PROJECT_INSTRUCTIONS:
         scope = "local" if relative == "CLAUDE.local.md" else "project"
         _instructions(c, repo, relative, scope, repo)
-    for directory in nested:
-        relative = directory.relative_to(repo).as_posix()
-        for name in NESTED_INSTRUCTIONS:
-            if (directory / name).is_file():
-                _instructions(c, repo, f"{relative}/{name}", "project", repo)
-        if (directory / ".claude" / "skills").is_dir():
+    for nested_dir in nested:
+        relative = nested_dir.relative
+        if "CLAUDE.md" in nested_dir.markers:
+            _instructions(c, repo, f"{relative}/CLAUDE.md", "project", repo)
+        if ".claude" in nested_dir.markers and (nested_dir.path / ".claude" / "skills").is_dir():
             skills, _ = c.reach(repo, f"{relative}/.claude/skills", HARNESS, "project", repo)
             if skills is not None:
                 list(c.skills_dir(skills, HARNESS, "project", repo, None, {"nested": relative}))

@@ -24,7 +24,23 @@ from pathlib import Path
 BUDGETS_MS = {"version": 100, "inventory_cold": 2000, "inventory_warm": 500, "usage_warm": 500}
 
 
-def generate(base: Path, repos: int, skills: int, transcript_mb: int) -> dict[str, str]:
+def deep_tree(root: Path, dirs: int, files_per_dir: int, rng: random.Random) -> None:
+    """A source tree shaped like a real repo: nested packages, a few levels deep."""
+    made = [root]
+    for index in range(dirs):
+        parent = rng.choice(made[-200:] if len(made) > 200 else made)
+        if len(parent.relative_to(root).parts) >= 7:
+            parent = root
+        child = parent / f"d{index}"
+        child.mkdir(parents=True, exist_ok=True)
+        made.append(child)
+        for f in range(files_per_dir):
+            (child / f"f{f}.ts").touch()
+
+
+def generate(
+    base: Path, repos: int, skills: int, transcript_mb: int, realistic: bool = False
+) -> dict[str, str]:
     rng = random.Random(7)
     home = base / "home"
     claude = home / ".claude"
@@ -50,6 +66,13 @@ def generate(base: Path, repos: int, skills: int, transcript_mb: int) -> dict[st
             (skill / "scripts/run.py").write_text("print('hi')\n" * 20)
         (repo / "src/pkg").mkdir(parents=True)
         (repo / "node_modules/dep").mkdir(parents=True)
+        if realistic:
+            deep_tree(repo / "src", 1200, 4, rng)
+            deep_tree(repo / "node_modules", 800, 3, rng)
+            (repo / "packages/api").mkdir(parents=True)
+            (repo / "packages/api/CLAUDE.md").write_text("api\n")
+            vendored = repo / ".claude/skills/skill-0/node_modules"
+            deep_tree(vendored, 150, 4, rng)
     projects = claude / "projects"
     target = transcript_mb * 1024 * 1024
     written = 0
@@ -134,6 +157,9 @@ def main() -> int:
     parser.add_argument("--skills", type=int, default=30)
     parser.add_argument("--transcript-mb", type=int, default=200)
     parser.add_argument("--small", action="store_true")
+    parser.add_argument(
+        "--realistic", action="store_true", help="Deep repo trees and vendored skill deps."
+    )
     parser.add_argument("--json", type=Path)
     parser.add_argument("--compare", type=Path, help="Baseline JSON; flag >25%% regressions.")
     args = parser.parse_args()
@@ -142,7 +168,7 @@ def main() -> int:
     base = Path(tempfile.mkdtemp(prefix="kitctl-bench-"))
     try:
         start = time.perf_counter()
-        env = generate(base, args.repos, args.skills, args.transcript_mb)
+        env = generate(base, args.repos, args.skills, args.transcript_mb, args.realistic)
         print(
             f"fixture: {args.repos} repos x {args.skills} skills, {args.transcript_mb} MB logs "
             f"({time.perf_counter() - start:.1f} s to generate)"
@@ -173,7 +199,12 @@ def main() -> int:
     finally:
         shutil.rmtree(base, ignore_errors=True)
     payload = {
-        "size": {"repos": args.repos, "skills": args.skills, "transcript_mb": args.transcript_mb},
+        "size": {
+            "repos": args.repos,
+            "skills": args.skills,
+            "realistic": args.realistic,
+            "transcript_mb": args.transcript_mb,
+        },
         "results": results,
     }
     if args.json:

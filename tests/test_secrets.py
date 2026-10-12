@@ -83,3 +83,12 @@ def test_repo_check_flags_new_kinds_without_values(sandbox: Path) -> None:
     assert result.returncode == 1
     assert "anthropic-key" in result.stderr
     assert SAMPLES["anthropic-key"] not in result.stderr + result.stdout
+
+
+def test_redact_fast_path_matches_full_scan() -> None:
+    from kitctl.secretscan import redact
+
+    for sample in [*SAMPLES.values(), "short", "a" * 64, "/Users/me/Code/app/.mcp.json"]:
+        text, kinds = redact(sample)
+        assert (text != sample) == bool(kinds)
+    assert redact(SAMPLES["jwt"])[1] == ["jwt"]

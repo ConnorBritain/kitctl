@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 PRUNE = frozenset(
@@ -103,16 +104,67 @@ def find_repos_detail(
     return sorted(set(repos)), sorted(set(skipped))
 
 
-def nested_dirs(repo: Path, max_depth: int = 6) -> Iterator[Path]:
-    """Directories inside ``repo`` (excluding the root) where nested instructions may live."""
-    visited = {_identity(repo)}
-    frontier = [(child, 1) for child in _subdirs(repo)]
-    while frontier:
-        directory, depth = frontier.pop()
-        identity = _identity(directory)
-        if identity in visited or is_repo(directory):
+MARKERS = frozenset({"CLAUDE.md", "AGENTS.md", "AGENTS.override.md", ".claude", ".agents"})
+
+
+@dataclass(frozen=True)
+class Nested:
+    """A directory inside a repo holding at least one nested-instruction marker."""
+
+    path: Path
+    relative: str
+    markers: frozenset[str]
+
+
+def _listing(directory: str) -> tuple[bool, frozenset[str], list[tuple[str, bool]]]:
+    """``(has_git, markers, [(subdir name, is_link)])`` from one ``scandir``."""
+    with os.scandir(directory) as listing:
+        entries = list(listing)
+    names = {entry.name for entry in entries}
+    subdirs: list[tuple[str, bool]] = []
+    for entry in entries:
+        if entry.name in PRUNE or entry.name.startswith("."):
             continue
-        visited.add(identity)
-        yield directory
-        if depth < max_depth:
-            frontier.extend((child, depth + 1) for child in _subdirs(directory))
+        try:
+            if entry.is_symlink():
+                if entry.is_dir():
+                    subdirs.append((entry.name, True))
+            elif entry.is_dir(follow_symlinks=False):
+                subdirs.append((entry.name, False))
+        except OSError:
+            continue
+    return ".git" in names, frozenset(names & MARKERS), subdirs
+
+
+def nested_markers(repo: Path, max_depth: int = 6) -> list[Nested]:
+    """Directories below ``repo`` (to ``max_depth``) that contain instruction markers.
+
+    One ``scandir`` per directory yields its subdirectories, its markers, and whether it is
+    a nested repository (skipped), so callers never stat candidate files themselves.
+    """
+    results: list[Nested] = []
+    visited: set[tuple[int, int] | str] = {_identity(repo)}
+    stack: list[tuple[str, str, int]] = [(str(repo), "", 0)]
+    while stack:
+        directory, relative, depth = stack.pop()
+        try:
+            has_git, markers, subdirs = _listing(directory)
+        except OSError:
+            continue
+        if depth > 0:
+            if has_git:
+                continue  # a nested repository or submodule
+            if markers:
+                results.append(Nested(Path(directory), relative, markers))
+        if depth >= max_depth:
+            continue
+        for name, is_link in subdirs:
+            path = os.path.join(directory, name)
+            if is_link:  # only links can form cycles
+                identity = _identity(Path(path))
+                if identity in visited:
+                    continue
+                visited.add(identity)
+            child = f"{relative}/{name}" if relative else name
+            stack.append((path, child, depth + 1))
+    return sorted(results, key=lambda item: item.relative)

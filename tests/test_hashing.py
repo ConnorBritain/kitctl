@@ -74,3 +74,17 @@ def test_writes_outside_kitctl_dirs_are_refused(tmp_path: Path) -> None:
     fs.allow(tmp_path / "out")
     fs.write_atomic(tmp_path / "out/report.md", "ok")
     assert (tmp_path / "out/report.md").read_text() == "ok"
+
+
+def test_vendored_dirs_are_not_hashed(tmp_path: Path) -> None:
+    from kitctl.scan import walk_tree
+
+    skill = tmp_path / "skill"
+    (skill / "node_modules/dep").mkdir(parents=True)
+    (skill / "node_modules/dep/index.js").write_text("x")
+    (skill / ".venv/lib").mkdir(parents=True)
+    (skill / "dist").mkdir()
+    (skill / "dist/app.js").write_text("built")
+    (skill / "SKILL.md").write_text("s")
+    names = {item.relative for item in walk_tree(skill, [tmp_path]).files}
+    assert names == {"SKILL.md", "dist/app.js"}

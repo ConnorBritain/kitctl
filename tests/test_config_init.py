@@ -60,6 +60,7 @@ def test_init_interactive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert main(["init"]) == 0
     loaded = config.load(resolve().kit_config_file)
     assert loaded == config.UserConfig([str(tmp_path / "work")], str(tmp_path / "wh"), 2)
+    assert loaded.nested_depth == 6 and loaded.include_worktrees is False
 
 
 def test_inventory_uses_config_repos(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:

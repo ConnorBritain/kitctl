@@ -1,33 +1,34 @@
 {
   "size": {
-    "repos": 50,
+    "repos": 60,
     "skills": 30,
+    "realistic": true,
     "transcript_mb": 200
   },
   "results": {
     "version": {
-      "ms": 38.1,
-      "peak_rss_mb": 13
+      "ms": 40.1,
+      "peak_rss_mb": 14
     },
     "inventory_cold": {
-      "ms": 583.1,
-      "peak_rss_mb": 25
+      "ms": 1302.3,
+      "peak_rss_mb": 27
     },
     "inventory_warm": {
-      "ms": 386.2,
-      "peak_rss_mb": 25
+      "ms": 1029.1,
+      "peak_rss_mb": 27
     },
     "usage_cold": {
-      "ms": 668.9,
+      "ms": 709.9,
       "peak_rss_mb": 22
     },
     "usage_warm": {
-      "ms": 192.3,
+      "ms": 166.9,
       "peak_rss_mb": 22
     },
     "report_warm": {
-      "ms": 676.8,
-      "peak_rss_mb": 26
+      "ms": 1222.7,
+      "peak_rss_mb": 27
     }
   }
 }

@@ -6,6 +6,7 @@ Only metadata, hashes, and findings are reported; configuration values never are
 from __future__ import annotations
 
 import os
+import time
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
@@ -19,6 +20,19 @@ from kitctl.hashing import HASH_SCHEME, HashCache
 from kitctl.model import SCHEMA_VERSION
 from kitctl.scan import normalize_roots
 from kitctl.sources import claude, codex
+
+
+class _Clock:
+    def __init__(self, sink: dict[str, float] | None) -> None:
+        self.sink = sink
+        self.last = time.perf_counter()
+
+    def lap(self, name: str, accumulate: bool = False) -> None:
+        now = time.perf_counter()
+        if self.sink is not None:
+            elapsed = now - self.last
+            self.sink[name] = self.sink.get(name, 0.0) + elapsed if accumulate else elapsed
+        self.last = now
 
 
 def _case_collisions(c: Collector) -> None:
@@ -65,13 +79,17 @@ def inventory(
     *,
     use_cache: bool = True,
     settings: kit_config.UserConfig | None = None,
-    nested_depth: int = 4,
+    nested_depth: int | None = None,
     include_worktrees: bool | None = None,
+    timings: dict[str, float] | None = None,
 ) -> dict[str, Any]:
+    """Run discovery. If ``timings`` is given, it is filled with per-phase seconds/counts."""
+    clock = _Clock(timings)
     paths = kit_paths.resolve()
     if settings is None:
         settings = kit_config.load(paths.kit_config_file)
     repos, mode, skipped_worktrees = resolve_repos(roots, settings, include_worktrees)
+    clock.lap("discover_repos")
     repos = list(normalize_roots(repos))
     home = Path(os.path.realpath(paths.home))
     project_repos = [repo for repo in repos if repo != home]
@@ -81,18 +99,35 @@ def inventory(
     allowed = normalize_roots([*repos, *harness_dirs, warehouse])
     cache = HashCache(paths.kit_cache_dir / "hashes.json") if use_cache else HashCache()
     c = Collector(scan_roots, allowed, cache)
+    depth = nested_depth if nested_depth is not None else (settings.nested_depth if settings else 6)
+    clock.lap("load_cache")
 
     claude.collect_user(c, paths)
+    clock.lap("claude_user")
     trusted = codex.collect_user(c, paths)
+    clock.lap("codex_user")
     for repo in project_repos:
-        nested = list(discover.nested_dirs(repo, nested_depth))
+        nested = discover.nested_markers(repo, depth)
+        clock.lap("nested_walk", accumulate=True)
         claude.collect_project(c, repo, nested)
+        clock.lap("claude_projects", accumulate=True)
         codex.collect_project(c, repo, nested, trusted)
+        clock.lap("codex_projects", accumulate=True)
     _case_collisions(c)
+    clock.lap("analysis")
     try:
         cache.save()
     except OSError as error:
         c.finding("info", "cache-unwritable", str(cache.location), error.strerror or "")
+    clock.lap("save_cache")
+    if timings is not None:
+        timings.update(
+            repos=len(project_repos),
+            entries=len(c.entries),
+            files_hashed=cache.misses,
+            files_cached=cache.hits,
+            bytes_hashed=cache.bytes_hashed,
+        )
 
     return {
         "schema_version": SCHEMA_VERSION,
