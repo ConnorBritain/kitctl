@@ -1,4 +1,4 @@
-"""Platform and environment resolution. Every harness and Kit location comes from here."""
+"""Platform and environment resolution. Every harness and kitctl location comes from here."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class Paths:
 
     @property
     def harness_dirs(self) -> tuple[Path, ...]:
-        """Directories whose contents Kit may read through links."""
+        """Directories whose contents kitctl may read through links."""
         return (self.claude_config_dir, self.codex_home, self.agents_home)
 
     @property

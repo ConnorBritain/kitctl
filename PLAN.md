@@ -1,4 +1,4 @@
-# Kit implementation plan
+# kitctl implementation plan
 
 Created 2026-10-11 from the supplied bootstrap brief and the user's request to
 plan, build, use MIT, and reserve namespaces promptly. The brief supplies product
@@ -7,7 +7,7 @@ requirements; it is not an independent grant of permission to change live config
 ## Decisions and boundaries
 
 - Python 3.11+, uv, argparse, zero runtime dependencies in 0.0.1.
-- Kit's own files are TOML (stdlib tomllib) and kit.lock is JSON (confirmed 2026-10-12).
+- kitctl's own files are TOML (stdlib tomllib) and kit.lock is JSON (confirmed 2026-10-12).
   Add tomlkit only when 0.2.0 edits Codex config.toml; don't write
   generators before validating their target schemas and installed capabilities.
 - Binary/package: kitctl; document pre-existing AWS and Gravwell binary collisions.
@@ -37,7 +37,7 @@ requirements; it is not an independent grant of permission to change live config
 | 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
 | 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
 | 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |
-| 9 Removal | Purge restores baseline; eject preserves effective config with zero Kit dependencies | Ledger/removal tests must precede first real apply |
+| 9 Removal | Purge restores baseline; eject preserves effective config with zero kitctl dependencies | Ledger/removal tests must precede first real apply |
 
 Implement and prove the ledger, conflicts, interrupted-write recovery, purge, and
 eject in the sandbox before any real apply, rather than leaving those proofs until

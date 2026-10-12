@@ -80,7 +80,7 @@ def tree_digest(items: Iterable[tuple[str, str]]) -> str:
 
 
 class HashCache:
-    """Stat-keyed cache of file digests, stored in Kit's cache dir (never in agent config)."""
+    """Stat-keyed cache of file digests, stored in kitctl's cache dir (never in agent config)."""
 
     VERSION = 1
 

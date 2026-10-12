@@ -1,7 +1,7 @@
-# Kit (`kitctl`)
+# kitctl
 
-Kit inventories the skills, MCP configuration, hooks, and plugins used by coding
-agents. The planned compiler manages named **loadouts** from a separate private
+kitctl (pronounced "kit control"; colloquially "kit") inventories the skills,
+MCP configuration, hooks, and plugins used by coding agents. The planned compiler manages named **loadouts** from a separate private
 warehouse and writes each harness's native configuration with an ownership ledger.
 The planned default warehouse location is `~/kits`; setup will ask which parent
 directories contain your repositories.
@@ -40,7 +40,7 @@ run install scripts, or ship a `kit` binary. uv manages Python if needed.
 `inventory` defaults to the current directory. Repeat `--root` to inspect several
 repositories, or explicitly pass your home directory to include user config.
 There is no recursive search through unrelated repositories. Links (symlinks and
-Windows junctions) are recorded as entries with their resolved target; Kit reads
+Windows junctions) are recorded as entries with their resolved target; kitctl reads
 through a link only when the target is inside a scanned root, a harness config dir
 (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `~/.agents`), or the warehouse. Broken links are
 findings. JSON includes paths, hashes (`hash_scheme` 2: line endings and junk files
@@ -77,8 +77,8 @@ See [PLAN.md](PLAN.md), [design](docs/design.md),
 
 ## Naming
 
-Kit ships only the `kitctl` command. AWS's Kubernetes Iteration Toolkit and
-Gravwell also use a `kitctl` binary; installing those tools alongside Kit can
+kitctl ships only the `kitctl` command. AWS's Kubernetes Iteration Toolkit and
+Gravwell also use a `kitctl` binary; installing those tools alongside kitctl can
 cause PATH collisions. This project is independent of those projects and KitOps.
 
 MIT License. The code repository and private warehouse are deliberately separate.

@@ -2,7 +2,7 @@
 
 ## Unreleased (0.1.0 track)
 
-- Links are first-class inventory entries with `link_target`; Kit reads through them
+- Links are first-class inventory entries with `link_target`; kitctl reads through them
   only into allowed roots. Windows junctions are handled; broken links are findings.
 - `hash_scheme` 2: CRLF/CR normalized for text, junk files skipped, NFC POSIX paths.
 - New `paths` module honors `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `HOME`/`USERPROFILE`, XDG.

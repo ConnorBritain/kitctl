@@ -1,4 +1,4 @@
-# Kit design proposal
+# kitctl design proposal
 
 Draft for review, 2026-10-11. Only read-only discovery is implemented in 0.0.1.
 Do not interpret this document as permission to apply native configuration.
@@ -8,7 +8,7 @@ Do not interpret this document as permission to apply native configuration.
 The code lives in kitctl; actual skills, connectors, scripts, plugins, loadouts,
 captures, and retired content live in a separate private warehouse. `kit.toml`
 declares repo intent. `kit.lock` records the exact resolved warehouse commit,
-schema/compiler versions, and all Kit-owned effects. The agent proposes; a
+schema/compiler versions, and all kitctl-owned effects. The agent proposes; a
 deterministic compiler plans, previews, and commits changes.
 
 Default warehouse location is ~/kits; the private GitHub repository can remain
@@ -20,7 +20,7 @@ attic/, marketplace/. Nothing is retired by deleting warehouse content.
 
 ## Versioned model
 
-Kit's hand-edited documents (`kit.toml`, `loadouts/*.toml`, triage decisions, user
+kitctl's hand-edited documents (`kit.toml`, `loadouts/*.toml`, triage decisions, user
 config) are TOML, read with stdlib `tomllib`; `kit.lock` is machine-written JSON with
 sorted keys. All use schema_version: 1 and reject unknown fields. Names are
 restricted to safe slug characters; references cannot contain traversal or escape
@@ -110,12 +110,12 @@ public registry. Measure the <300ms warm no-change path rather than assuming it.
 
 Purge reverses owned insertions and restores preimages, preserving unrelated edits.
 It removes only unchanged owned content; drift is a conflict with a recovery plan.
-Directories are removed only if Kit created them and they are empty.
+Directories are removed only if kitctl created them and they are empty.
 
 Eject first materializes the current effective configuration as independent native
-files, copies any required scripts/assets out of Kit-managed paths, then relinquishes
-ownership and removes Kit metadata, instruction markers, and capture hooks.
-Functional safety policy can survive as independently owned native hooks; Kit's
+files, copies any required scripts/assets out of kitctl-managed paths, then relinquishes
+ownership and removes kitctl metadata, instruction markers, and capture hooks.
+Functional safety policy can survive as independently owned native hooks; kitctl's
 capture/management hooks cannot. Check effective behavior and dependencies, not
 just config bytes. Deleting all generated hooks while preserving policy would
 otherwise be contradictory.
@@ -124,7 +124,7 @@ otherwise be contradictory.
 
 Sandbox baseline -> global + multiple repo apply -> repeat apply (no diff) ->
 interrupted write recovery -> unrelated user edits -> purge restoring baseline.
-Separate eject test proves effective native behavior survives with no Kit runtime
+Separate eject test proves effective native behavior survives with no kitctl runtime
 or warehouse dependency. Include schema failure, path traversal, Windows paths,
 duplicate markers, corrupted ledger, concurrent writes, and drift conflicts.
 Only then review a real dry-run diff and ask for live apply authorization.

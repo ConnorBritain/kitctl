@@ -49,7 +49,7 @@ def _inventory(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="kitctl", description="Kit — inventory and manage agent tooling."
+        prog="kitctl", description="kitctl — inventory and manage agent tooling."
     )
     parser.add_argument("--version", action="version", version=f"kitctl {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
