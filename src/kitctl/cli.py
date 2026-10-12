@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import sys
 from pathlib import Path
 
 from kitctl import __version__
@@ -247,7 +248,15 @@ def main(argv: list[str] | None = None) -> int:
     market.add_argument("--dry-run", action="store_true")
     market.set_defaults(handler="write:marketplace")
 
-    args = parser.parse_args(argv)
+    hook = bool(argv if argv is not None else sys.argv[1:]) and (
+        (argv if argv is not None else sys.argv[1:])[0] in ("guard", "reconcile")
+    )
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit:
+        if hook:
+            return 0  # exit 2 would block the session or tool call; hooks fail open
+        raise
     module, name = args.handler.split(":")
     handler = getattr(importlib.import_module(f"kitctl.commands.{module}"), name)
     result: int = handler(args)

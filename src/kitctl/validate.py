@@ -6,6 +6,7 @@ Layout (docs/design.md): ``loadouts/<name>.toml`` and
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -13,7 +14,8 @@ from typing import Any
 
 from kitctl.model import Finding
 
-SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+# No trailing dot: Windows strips it, so "foo." and "foo" would be one folder.
+SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9_-])?$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 PRIMITIVE_KINDS = {
     "skills": "skill",
@@ -165,8 +167,31 @@ class _Validator:
                     )
                 if kind == "mcp" and not (item / "server.json").is_file():
                     self.error(document, "MCP primitive is missing server.json", "missing-file")
+                elif kind == "mcp":
+                    self.server(item / "server.json")
+                for linked in (item, item / "files"):
+                    if linked.is_symlink():
+                        self.error(linked, "Primitive folders must not be symlinks", "symlink")
                 known.add((kind, item.name))
         return known
+
+    def server(self, path: Path) -> None:
+        from kitctl.compile import credential_problems
+
+        try:
+            data = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError) as error:
+            self.error(path, f"Invalid JSON: {error}", "invalid-json")
+            return
+        if not isinstance(data, dict) or len(data) != 1:
+            self.error(path, "server.json must hold one {name: {...}} entry")
+            return
+        (config,) = data.values()
+        if not isinstance(config, dict):
+            self.error(path, "server.json must hold one {name: {...}} entry")
+            return
+        for problem in credential_problems(config):
+            self.error(path, f"server.json {problem}", "literal-credential")
 
     def hook(self, document: Path, item: Path, spec: Any) -> None:
         if spec is None:
@@ -194,6 +219,8 @@ class _Validator:
         if isinstance(script, str):
             if not _safe_relative(script):
                 self.error(document, "hook.script must be relative without '..'", "path-traversal")
+            elif (item / "files" / script).is_symlink():
+                self.error(document, f"hook.script {script!r} is a symlink", "symlink")
             elif not (item / "files" / script).is_file():
                 self.error(
                     document, f"hook.script {script!r} not found under files/", "missing-file"

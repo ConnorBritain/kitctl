@@ -182,8 +182,8 @@ def status(args: argparse.Namespace) -> int:
     else:
         if journal:
             print(
-                f"An apply for {journal['owner']} was interrupted; the next apply, purge, or "
-                "`kitctl recover` finishes it."
+                f"An apply for {journal['owner']} was interrupted; `kitctl recover` finishes it "
+                "(`kitctl recover --rollback` undoes it)."
             )
         current = None
         for row in rows:
@@ -244,6 +244,11 @@ def eject(args: argparse.Namespace) -> int:
             return EXIT_OK
         if capture is not None:
             engine.apply(capture, paths)
+            # Capture shared files with the plans above; plan again against the new bytes.
+            plans = [p for p in engine.eject_plans(paths, copy) if p.owner != "capture"]
+            for plan in plans:
+                if plan.owner == "user" and source is not None:
+                    plan.writes.extend(engine.marketplace_writes(source, copy))
         for plan in plans:
             engine.apply(plan, paths)
         leftovers = _references(paths, source)

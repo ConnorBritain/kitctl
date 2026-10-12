@@ -19,7 +19,7 @@ from kitctl import paths as kit_paths
 from kitctl.hashing import file_digest, tree_digest
 from kitctl.safemeta import canonical_hash, frontmatter
 from kitctl.scan import normalize_roots, walk_tree
-from kitctl.secretscan import find
+from kitctl.secretscan import find, find_bytes, is_config_name
 
 KIND_DIRS = {
     "skill": "skills",
@@ -31,7 +31,8 @@ KIND_DIRS = {
     "plugin": "plugins",
 }
 DESTINATIONS = ("inbox", "primitives", "attic")
-SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+# No trailing dot: Windows strips it, so "foo." and "foo" would be one folder.
+SLUG = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9_-])?$")
 
 
 class AdoptError(ValueError):
@@ -119,6 +120,23 @@ def _harnesses_for(path: Path) -> list[str]:
     return found or ["claude", "codex"]
 
 
+def _refuse_secrets(files: list[tuple[str, Path]]) -> None:
+    """The warehouse is a git repository: never copy credentials into it."""
+    for relative, path in files:
+        name = Path(relative).name
+        if name == ".env" or name.startswith(".env."):
+            raise AdoptError(
+                f"{relative} looks like an environment file; remove it from the "
+                "source (or adopt a copy without it)"
+            )
+        found = find_bytes(path.read_bytes(), is_config_name(name))
+        if found:
+            raise AdoptError(
+                f"{relative} contains what looks like a credential "
+                f"({', '.join(found)}); remove it before adopting"
+            )
+
+
 def adopt_path(
     source: Path,
     warehouse: Path,
@@ -149,6 +167,7 @@ def adopt_path(
         files = [(source.name, source)]
         content = file_digest(source)
         description = frontmatter(source.read_text("utf-8", errors="replace")).get("description")
+    _refuse_secrets(files)
     existing = _existing_hash(target)
     if existing == content:
         return {"status": "already adopted", "target": str(target), "content_hash": content}

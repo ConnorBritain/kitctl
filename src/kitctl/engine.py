@@ -22,6 +22,7 @@ import json
 import os
 import re
 import shutil
+import tomllib
 import uuid
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
@@ -31,6 +32,7 @@ from typing import Any
 
 from kitctl import fs
 from kitctl._vendor import tomlkit
+from kitctl._vendor.tomlkit.items import InlineTable
 from kitctl.compile import Effect, element_id, source_files
 from kitctl.paths import Paths
 from kitctl.safemeta import canonical_hash
@@ -70,6 +72,10 @@ class Ledger:
     def __init__(self, paths: Paths) -> None:
         self.path = paths.kit_state_dir / "ledger.json"
         self.records: dict[str, dict[str, Any]] = {}
+        # Per shared file: hash of its bytes before kitctl first changed it ("original",
+        # None if absent, "stale" once someone else edited it) and after kitctl's last write.
+        self.files: dict[str, dict[str, Any]] = {}
+        self.store = paths.kit_state_dir / "preimages"
         if self.path.is_file():
             try:
                 data = json.loads(self.path.read_text("utf-8"))
@@ -82,6 +88,7 @@ class Ledger:
             if not isinstance(data, dict) or data.get("schema_version") != SCHEMA:
                 raise EngineError(f"Ledger {self.path} has an unsupported schema")
             self.records = dict(data.get("effects", {}))
+            self.files = dict(data.get("files", {}))
 
     def owned(self, owner: str) -> dict[str, dict[str, Any]]:
         return {k: r for k, r in self.records.items() if r["owner"] == owner}
@@ -89,8 +96,17 @@ class Ledger:
     def owners(self) -> list[str]:
         return sorted({r["owner"] for r in self.records.values()})
 
-    def text(self, records: dict[str, dict[str, Any]]) -> str:
-        return json.dumps({"schema_version": SCHEMA, "effects": records}, indent=2, sort_keys=True)
+    def text(self, records: dict[str, dict[str, Any]], files: dict[str, Any] | None = None) -> str:
+        targets = {r["target"] for r in records.values()}
+        kept = {k: v for k, v in (self.files if files is None else files).items() if k in targets}
+        document = {"schema_version": SCHEMA, "effects": records, "files": kept}
+        return json.dumps(document, indent=2, sort_keys=True)
+
+    def preimage(self, digest: str) -> bytes | None:
+        try:
+            return (self.store / digest).read_bytes()
+        except OSError:
+            return None
 
 
 # -- document access ------------------------------------------------------------------------
@@ -123,16 +139,20 @@ class Document:
     def __init__(self, path: Path, fmt: str) -> None:
         self.path = path
         self.fmt = fmt
-        self.before: bytes | None = path.read_bytes() if path.is_file() else None
         if path.is_symlink():
             raise EngineError(f"{path} is a symlink; kitctl won't write through links")
+        if path.exists() and not path.is_file():
+            raise EngineError(f"{path} exists but isn't a regular file")
+        self.before: bytes | None = path.read_bytes() if path.is_file() else None
         text = self.before.decode("utf-8") if self.before is not None else ""
+        if text.startswith("\ufeff"):
+            raise EngineError(f"{path} starts with a byte-order mark; save it as plain UTF-8")
         self.style = _style(text)
         self._trim: int | None = None
         self.data: Any
         if fmt == "json":
             try:
-                self.data = json.loads(text) if text.strip() else {}
+                self.data = json.loads(text, object_pairs_hook=_unique) if text.strip() else {}
             except ValueError as error:
                 raise EngineError(f"{path} is not valid JSON ({error}); fix it first") from error
             if not isinstance(self.data, dict):
@@ -175,6 +195,13 @@ class Document:
             return True, _plain(container[identity[-1]])
         return False, None
 
+    def near(self, identity: tuple[str, ...], locator: list[str]) -> bool:
+        """Is there an edited copy of a kitctl array element (same locator, other hash)?"""
+        container, _ = self._container(identity[:-1], False)
+        if not locator or not isinstance(container, list):
+            return False
+        return any(_locator(_plain(element)) == locator for element in container)
+
     def set(self, op: str, identity: tuple[str, ...], value: Any, old: Any = None) -> int:
         """Insert or replace; returns how many parent containers were created."""
         if op == "block":
@@ -198,6 +225,11 @@ class Document:
         container, created = self._container(identity[:-1], True)
         if not isinstance(container, dict):
             raise EngineError(f"{self.path}: {'.'.join(identity[:-1])} is not a table/object")
+        if self.fmt == "toml" and isinstance(container, InlineTable):
+            raise EngineError(
+                f"{self.path}: {'.'.join(identity[:-1])} is an inline table; rewrite it as "
+                f"[{'.'.join(identity[:-1])}.<name>] tables first"
+            )
         container[identity[-1]] = _toml_value(value) if self.fmt == "toml" else value
         return created
 
@@ -307,6 +339,29 @@ class Document:
         return str(self.data).encode("utf-8")
 
 
+def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """JSON object hook: duplicate keys would silently lose data on rewrite."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate key {key!r}")
+        result[key] = value
+    return result
+
+
+def valid(fmt: str, data: bytes) -> str | None:
+    """Why rendered bytes wouldn't load, or None."""
+    try:
+        text = data.decode("utf-8")
+        if fmt == "json":
+            json.loads(text)
+        elif fmt == "toml":
+            tomllib.loads(text)
+    except (UnicodeDecodeError, ValueError) as error:
+        return str(error)
+    return None
+
+
 def _plain(value: Any) -> Any:
     unwrap = getattr(value, "unwrap", None)
     return unwrap() if callable(unwrap) else value
@@ -333,6 +388,8 @@ def _format(op: str) -> str:
 def _tree_state(directory: Path) -> dict[str, str] | None:
     if directory.is_symlink():
         raise EngineError(f"{directory} is a symlink; kitctl won't write through links")
+    if directory.exists() and not directory.is_dir():
+        raise EngineError(f"{directory} exists but isn't a directory")
     if not directory.is_dir():
         return None
     return {rel: bhash(path.read_bytes()) or "" for rel, path in source_files(directory).items()}
@@ -378,6 +435,8 @@ class Plan:
     records: dict[str, dict[str, Any]] = field(default_factory=dict)  # owner's ledger after
     remove_dirs: list[tuple[Path, Path]] = field(default_factory=list)  # (dir, a target)
     notes: list[str] = field(default_factory=list)
+    files: dict[str, dict[str, Any] | None] = field(default_factory=dict)  # file baselines
+    preserve: dict[str, bytes] = field(default_factory=dict)  # preimages to keep, by hash
 
     @property
     def empty(self) -> bool:
@@ -396,6 +455,18 @@ def _record(effect: Effect, value_hash: str, **extra: Any) -> dict[str, Any]:
         "applied_at": now(),
         **extra,
     }
+
+
+def _locator(value: Any) -> list[str]:
+    """What identifies a JSON array element even after someone edits it: hook commands,
+    or the string itself (permission rules)."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict) and isinstance(value.get("hooks"), list):
+        return sorted(
+            h["command"] for h in value["hooks"] if isinstance(h, dict) and "command" in h
+        )
+    return []
 
 
 def _created_prefixes(record: dict[str, Any]) -> set[tuple[str, ...]]:
@@ -488,7 +559,18 @@ class Planner:
         change = Change("", base.item, base.harness, base.op, base.target, base.identity, current)
         if effect and record:
             desired_hash = vhash(effect.value)
+            extra: dict[str, Any] = {}
             if not present:
+                if base.op == "json-element" and document.near(
+                    base.identity, record.get("locator", [])
+                ):
+                    self.conflict(
+                        effect,
+                        "edited since kitctl wrote it (drift); revert the "
+                        "edit or adopt the new version into the warehouse",
+                    )
+                    self.keep(key, record)
+                    return
                 change.action, change.after = "restore", effect.value
                 document.set(effect.op, effect.identity, effect.value)
             elif current_hash == record["written_hash"]:
@@ -497,6 +579,9 @@ class Planner:
                     return
                 change.action, change.after = "update", effect.value
                 document.set(effect.op, effect.identity, effect.value, old=current)
+                if record.get("preexisting"):
+                    # The user's own entry, adopted unchanged; keep it so purge restores it.
+                    extra = {"preexisting": False, "preimage_present": True, "preimage": current}
             else:
                 self.conflict(
                     effect,
@@ -507,7 +592,10 @@ class Planner:
                 return
             self.keep(
                 key,
-                record | {"written_hash": desired_hash, "applied_at": now(), "item": effect.item},
+                record
+                | {"written_hash": desired_hash, "applied_at": now(), "item": effect.item}
+                | {"locator": _locator(effect.value)}
+                | extra,
             )
         elif effect:
             desired_hash = vhash(effect.value)
@@ -530,6 +618,7 @@ class Planner:
                         block_prefix=prefix,
                         created_dirs=dirs,
                         file_tail=tail,
+                        locator=_locator(effect.value),
                     ),
                 )
             elif current_hash == desired_hash:
@@ -543,6 +632,7 @@ class Planner:
                         preimage_present=True,
                         created_parents=0,
                         created_file=False,
+                        locator=_locator(effect.value),
                     ),
                 )
             elif self.replace and not _secretish(current):
@@ -558,6 +648,7 @@ class Planner:
                         preimage=current,
                         created_parents=0,
                         created_file=False,
+                        locator=_locator(effect.value),
                     ),
                 )
             else:
@@ -574,6 +665,18 @@ class Planner:
                 return
         else:
             assert record is not None
+            if (
+                not present
+                and base.op == "json-element"
+                and document.near(base.identity, record.get("locator", []))
+            ):
+                self.conflict(
+                    base,
+                    "edited since kitctl wrote it (drift); kitctl won't remove "
+                    "it. Revert the edit, or remove it yourself and re-run",
+                )
+                self.keep(key, record)
+                return
             if not present:
                 change.action = "release"
                 self.plan.notes.append(f"{base.item}: already removed from {base.target}")
@@ -595,7 +698,7 @@ class Planner:
                 document.trim_tail(record.get("file_tail"))
                 made = {
                     prefix
-                    for other in self.owned.values()
+                    for other in self.ledger.records.values()
                     if other["target"] == record["target"]
                     for prefix in _created_prefixes(other)
                 }
@@ -605,21 +708,59 @@ class Planner:
         self.plan.changes.append(change)
 
     def finish(self, document: Document) -> None:
+        path = str(document.path)
         after = document.render()
+        state = self.ledger.files.get(path)
+        remaining = any(r["target"] == path for r in self.plan.records.values()) or any(
+            r["target"] == path for r in self.others.values()
+        )
+        unchanged = state is not None and bhash(document.before) == state["written"]
+        if not remaining and unchanged and state is not None and state["original"] != "stale":
+            # Everything kitctl put here is going and nobody else touched the file since:
+            # put back the exact original bytes (or remove the file kitctl created).
+            original = (
+                None if state["original"] is None else self.ledger.preimage(state["original"])
+            )
+            if state["original"] is None or original is not None:
+                if original != document.before:
+                    mode = document.path.stat().st_mode & 0o7777 if document.before else None
+                    self.plan.writes.append(
+                        FileWrite(document.path, document.before, original, mode)
+                    )
+                if original is None:
+                    self._remove_created_dirs(document.path)
+                self.plan.files[path] = None
+                return
         if document.path in self.created:
             still_owned = any(r["target"] == str(document.path) for r in self.plan.records.values())
             if document.empty() and not still_owned:
                 self.plan.writes.append(FileWrite(document.path, document.before, None))
-                dirs = {
-                    d
-                    for r in self.owned.values()
-                    if r["target"] == str(document.path)
-                    for d in r.get("created_dirs", [])
-                }
-                for directory in sorted(dirs, key=lambda d: -len(Path(d).parts)):
-                    self.plan.remove_dirs.append((Path(directory), document.path))
+                self._remove_created_dirs(document.path)
+                self.plan.files[path] = None
                 return
         if after != document.before:
+            problem = valid(document.fmt, after)
+            if problem:
+                self.plan.conflicts.append(
+                    Conflict(
+                        "(file)",
+                        document.path,
+                        (),
+                        f"the edit would not parse ({problem}); nothing written",
+                    )
+                )
+                return
+            if remaining:
+                baseline = (
+                    bhash(document.before)
+                    if state is None
+                    else (state["original"] if unchanged else "stale")
+                )
+                if state is None and document.before is not None:
+                    self.plan.preserve[bhash(document.before) or ""] = document.before
+                self.plan.files[path] = {"original": baseline, "written": bhash(after)}
+            else:
+                self.plan.files[path] = None
             if document.before is not None and document.fmt == "json":
                 original = document.before
                 if (
@@ -632,6 +773,16 @@ class Planner:
                     )
             mode = document.path.stat().st_mode & 0o7777 if document.before is not None else None
             self.plan.writes.append(FileWrite(document.path, document.before, after, mode))
+
+    def _remove_created_dirs(self, target: Path) -> None:
+        dirs = {
+            d
+            for r in self.ledger.records.values()
+            if r["target"] == str(target)
+            for d in r.get("created_dirs", [])
+        }
+        for directory in sorted(dirs, key=lambda d: -len(Path(d).parts)):
+            self.plan.remove_dirs.append((Path(directory), target))
 
     def copy(self, key: str) -> None:
         effect = self.desired.get(key)
@@ -646,6 +797,8 @@ class Planner:
         else:
             if target.is_symlink():
                 raise EngineError(f"{target} is a symlink; kitctl won't write through links")
+            if target.exists() and not target.is_file():
+                raise EngineError(f"{target} exists but isn't a regular file")
             current = bhash(target.read_bytes()) if target.is_file() else None
         present = current is not None
         change = Change("", base.item, base.harness, base.op, target, (), current)
@@ -684,12 +837,28 @@ class Planner:
                 if record
                 else _missing_dirs(target if base.op == "tree" else target.parent)
             )
+            extra: dict[str, Any] = {}
+            if record and record.get("preexisting") and present:
+                # Adopted user files are being replaced: keep their bytes so purge restores them.
+                saved: dict[str, str] = {}
+                originals = (
+                    [(rel, target / rel) for rel in current]
+                    if base.op == "tree"
+                    else [("", target)]
+                )
+                for rel, path in originals:
+                    data = path.read_bytes()
+                    digest = bhash(data) or ""
+                    self.plan.preserve[digest] = data
+                    saved[rel] = digest
+                extra = {"preimage_files": saved}
             self.write_copy(effect, current if present else None)
             self.keep(
                 key,
                 (record or {})
                 | _record(effect, desired_hash, preexisting=False, created_dirs=created_dirs)
-                | _files(effect),
+                | _files(effect)
+                | extra,
             )
             return
         assert record is not None
@@ -703,6 +872,25 @@ class Planner:
             return
         elif record.get("preexisting"):
             change.action = "release"
+        elif record.get("preimage_files"):
+            change.action = "restore"
+            saved = record["preimage_files"]
+            for rel, digest in saved.items():
+                path = target / rel if rel else target
+                data = self.ledger.preimage(digest)
+                if data is None:
+                    raise EngineError(
+                        f"the saved original of {path} is missing from "
+                        f"{self.ledger.store}; kitctl won't remove it"
+                    )
+                before = path.read_bytes() if path.is_file() else None
+                if before != data:
+                    self.plan.writes.append(FileWrite(path, before, data, None))
+            if base.op == "tree":
+                for rel in sorted(set(current) - set(saved)):
+                    self.plan.writes.append(
+                        FileWrite(target / rel, (target / rel).read_bytes(), None)
+                    )
         else:
             change.action = "remove"
             files = [target / rel for rel in current] if base.op == "tree" else [target]
@@ -911,6 +1099,15 @@ def apply(result: Plan, paths: Paths, crash_after: int | None = None) -> None:
         ledger = Ledger(paths)
         records = {k: r for k, r in ledger.records.items() if r["owner"] != result.owner}
         records.update(result.records)
+        files = dict(ledger.files)
+        for path, state in result.files.items():
+            if state is None:
+                files.pop(path, None)
+            else:
+                files[path] = state
+        for digest, data in result.preserve.items():
+            if not (ledger.store / digest).is_file():
+                fs.write_bytes(ledger.store / digest, data)
         for write in result.writes:
             if _current(write.path) != write.before:
                 raise EngineError(f"{write.path} changed since the plan was made; re-run")
@@ -933,10 +1130,10 @@ def apply(result: Plan, paths: Paths, crash_after: int | None = None) -> None:
                 "started_at": now(),
                 "writes": entries,
                 "ledger_before": ledger.text(ledger.records),
-                "ledger_after": ledger.text(records),
+                "ledger_after": ledger.text(records, files),
                 "remove_dirs": [[str(d), str(a)] for d, a in result.remove_dirs],
             }
-            fs.write_atomic(_journal_path(paths), json.dumps(journal, indent=2))
+            fs.write_atomic(_journal_path(paths), json.dumps(journal, indent=2), mode=0o600)
             for index, entry in enumerate(entries):
                 if crash_after is not None and index >= crash_after:
                     raise KeyboardInterrupt("simulated interruption")
@@ -952,9 +1149,11 @@ def _stage(result: Plan, token: str, backups: Path, entries: list[dict[str, Any]
             created = fs.agent_mkdirs(write.path.parent, write.path)
             staged = str(fs.agent_stage(write.path, write.after, token, write.mode))
         backup = None
+        mode = None
         if write.before is not None:
             backup = backups / str(index)
             fs.write_bytes(backup, write.before)
+            mode = write.path.stat().st_mode & 0o7777
         entries.append(
             {
                 "path": str(write.path),
@@ -962,6 +1161,7 @@ def _stage(result: Plan, token: str, backups: Path, entries: list[dict[str, Any]
                 "after": bhash(write.after),
                 "staged": staged,
                 "backup": str(backup) if backup else None,
+                "mode": mode,
                 "created_dirs": [str(d) for d in created],
             }
         )
@@ -980,7 +1180,7 @@ def _finish(journal: dict[str, Any], paths: Paths, ledger_path: Path) -> None:
         if Path(directory).is_dir():
             with fs.agent_scope([Path(anchor)]):
                 fs.agent_rmdir(Path(directory), Path(anchor))
-    fs.write_atomic(ledger_path, journal["ledger_after"])
+    fs.write_atomic(ledger_path, journal["ledger_after"], mode=0o600)
     _journal_path(paths).unlink(missing_ok=True)
     backups = paths.kit_state_dir / "backups" / journal["token"]
     if backups.is_dir():
@@ -1001,6 +1201,14 @@ def pending(paths: Paths) -> dict[str, Any] | None:
 
 def recover(paths: Paths, rollback: bool = False) -> str | None:
     """Finish (or with ``rollback``, undo) an interrupted apply. Returns a summary."""
+    try:
+        return _recover(paths, rollback)
+    except OSError as error:
+        hint = "" if rollback else " `kitctl recover --rollback` undoes the interrupted apply."
+        raise RecoveryNeeded(f"Recovery failed: {error}.{hint}") from error
+
+
+def _recover(paths: Paths, rollback: bool) -> str | None:
     journal = pending(paths)
     if journal is None:
         return None
@@ -1023,7 +1231,8 @@ def recover(paths: Paths, rollback: bool = False) -> str | None:
             problems.append(f"{entry['path']}: backup is missing")
     if problems:
         raise RecoveryNeeded(
-            "An interrupted apply can't be completed automatically: "
+            "An interrupted apply can't be completed automatically (`kitctl recover "
+            "--rollback` may undo it): "
             + "; ".join(problems)
             + f". Journal: {_journal_path(paths)}"
         )
@@ -1036,7 +1245,10 @@ def recover(paths: Paths, rollback: bool = False) -> str | None:
                 if current == entry["after"] and current != entry["before"]:
                     if entry["backup"]:
                         staged = fs.agent_stage(
-                            path, Path(entry["backup"]).read_bytes(), journal["token"] + "r", None
+                            path,
+                            Path(entry["backup"]).read_bytes(),
+                            journal["token"] + "r",
+                            entry.get("mode"),
                         )
                         fs.agent_replace(staged, path)
                     else:
@@ -1049,7 +1261,7 @@ def recover(paths: Paths, rollback: bool = False) -> str | None:
             for entry in reversed(entries):
                 for directory in reversed(entry.get("created_dirs", [])):
                     fs.agent_rmdir(Path(directory), Path(entry["path"]))
-            fs.write_atomic(ledger_path, journal["ledger_before"])
+            fs.write_atomic(ledger_path, journal["ledger_before"], mode=0o600)
             _journal_path(paths).unlink(missing_ok=True)
             backups = paths.kit_state_dir / "backups" / journal["token"]
             if backups.is_dir():
@@ -1079,7 +1291,10 @@ def status(paths: Paths, owners: Iterable[str] | None = None) -> list[dict[str, 
                 value_hash = vhash(current) if present else None
             elif op == "file":
                 data = _current(target)
-                present, value_hash = data is not None, vhash(bhash(data)) if data else None
+                present, value_hash = (
+                    data is not None,
+                    vhash(bhash(data)) if data is not None else None,
+                )
             else:
                 key = (target, op)
                 if key not in documents:

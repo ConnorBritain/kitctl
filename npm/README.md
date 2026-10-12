@@ -86,7 +86,8 @@ kitctl eject                         # keep everything as plain config; stop man
 - **Trust:** kitctl never marks Codex projects or hooks trusted; it tells you when Codex
   will ask.
 - **Capture (optional):** `kitctl capture install` adds a SessionStart hook that copies
-  skills and servers you add by hand into `~/kits/inbox` for triage, and a PreToolUse
+  user-level skills and servers you add by hand into `~/kits/inbox` for triage (skipping
+  anything that contains credentials), and a PreToolUse
   guard that stops agents editing kitctl-managed files (a guardrail, not a security
   boundary). `kitctl capture remove` takes both out.
 - **`kitctl marketplace build`** generates a Claude Code plugin marketplace in the

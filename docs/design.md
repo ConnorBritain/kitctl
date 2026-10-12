@@ -149,9 +149,19 @@ status, eject), `capture.py` (reconcile, guard, capture hooks), `marketplace.py`
   identical, conflict if different unless `--replace`, which records the preimage and is
   refused for entries holding literal credentials), owned and not desired (remove,
   restore the preimage, or release a pre-existing entry). Drifted content is always a
-  conflict. Containers kitctl created are pruned when they become empty; files it
-  created are deleted when they become empty; tomlkit's padding before appended tables
-  is trimmed on removal so purge restores bytes exactly.
+  conflict. For every shared file the ledger keeps the hash of its bytes before kitctl
+  first changed it and after kitctl's last write; when the last kitctl entry leaves a
+  file nobody else edited since, purge writes back those exact original bytes (or
+  deletes a file kitctl created). Otherwise removal is structural: containers kitctl
+  created are pruned when empty, and tomlkit's padding before appended tables is
+  trimmed. Original bytes live in `<state dir>/preimages/` (owner-only), as do the
+  originals of adopted files that a later apply replaces, so purge restores those too.
+- **Refusals.** Inline TOML tables kitctl would have to extend, targets that aren't
+  regular files (or directories, for skills), files with a byte-order mark or duplicate
+  JSON keys, edited copies of kitctl's hook entries, and any rendered file that would not
+  parse are conflicts. Warehouse `server.json` files with literal credentials,
+  symlinked primitive folders, and Codex project hooks with scripts (they would need an
+  absolute path in a committed file) fail validation or the plan.
 - **Ledger.** `<state dir>/ledger.json` (XDG_STATE_HOME/kitctl, ~/Library/Application
   Support/kitctl, %LOCALAPPDATA%\kitctl\State). Records hold value hashes, created
   containers/dirs/files, and preimages only when replaced. `kit.lock` (per repository)

@@ -32,8 +32,10 @@ APPLYING = "KITCTL_APPLYING"
 CLAUDE_GUARD_MATCHER = "Edit|Write|MultiEdit|NotebookEdit|Bash"
 CODEX_GUARD_MATCHER = "Bash|apply_patch|Edit|Write"
 CAPTURE_KINDS = ("skill", "agent", "command", "rules", "mcp_server")
+_REDIRECT = re.compile(r"\d*>>?\s*/dev/null|\d*>&\d|<\(")
 _WRITE_WORDS = re.compile(
-    r"(^|[\s;&|(])(rm|mv|cp|tee|truncate|chmod|ln|install|rsync|dd)\s|>>?|\bsed\s+-i|\bperl\s+-i"
+    r"(^|[\s;&|(])(rm|rmdir|mv|cp|tee|truncate|chmod|ln|install|rsync|dd|unlink)\s|>>?"
+    r"|\bsed\s+-i|\bperl\s+-i|\s-delete\b"
 )
 _PATCH_FILE = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$", re.MULTILINE)
 
@@ -155,12 +157,14 @@ def _ledger_paths(paths: Paths) -> tuple[set[str], set[str], set[tuple[str, str]
     except (OSError, ValueError, KeyError, TypeError):
         return set(), set(), set()
     owned = {str(paths.kit_state_dir / "ledger.json")}
+    roots: set[str] = set()
     shared: set[str] = set()
     entries: set[tuple[str, str]] = set()
     for record in records.values():
         target = record["target"]
         if record["op"] == "tree":
             owned.update(str(Path(target) / rel) for rel in record.get("files", []))
+            roots.add(target)
         elif record["op"] == "file":
             owned.add(target)
         else:
@@ -168,7 +172,7 @@ def _ledger_paths(paths: Paths) -> tuple[set[str], set[str], set[tuple[str, str]
             entries.add((target, "/".join(record["identity"])))
         if record["owner"] not in ("user", OWNER):
             owned.add(str(Path(record["owner"]) / "kit.lock"))
-    return owned, shared, entries
+    return owned | roots, shared, entries
 
 
 # -- reconcile -------------------------------------------------------------------------------
@@ -188,7 +192,9 @@ def candidates(paths: Paths, repo: Path | None) -> list[dict[str, Any]]:
     for entry in report["entries"]:
         if entry["kind"] not in CAPTURE_KINDS or entry["provided_by"]:
             continue
-        if entry["scope"] not in ("user", "project") or entry.get("link_target"):
+        # User scope only: project items belong to whichever repo you opened, possibly
+        # someone else's; capture those deliberately with `kitctl adopt`.
+        if entry["scope"] != "user" or entry.get("link_target"):
             continue
         path = entry["path"]
         if path in owned or any(o.startswith(path.rstrip("/") + os.sep) for o in owned):
@@ -370,6 +376,7 @@ def decide(payload: dict[str, Any], paths: Paths) -> tuple[str, str] | None:
                 f"{real} contains entries managed by kitctl; editing them causes drift that "
                 "`kitctl apply` will report."
             )
+    text = _REDIRECT.sub(" ", text)
     if text and _WRITE_WORDS.search(text):
         home = str(paths.home)
         haystack = _fold(text)

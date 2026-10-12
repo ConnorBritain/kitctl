@@ -42,12 +42,14 @@ def check(path: Path) -> Path:
     return real
 
 
-def write_atomic(path: Path, text: str) -> None:
+def write_atomic(path: Path, text: str, mode: int | None = None) -> None:
     """Write ``text`` to ``path`` via a staging file and atomic rename."""
     check(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     staging = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     staging.write_text(text, "utf-8")
+    if mode is not None:
+        os.chmod(staging, mode)
     os.replace(staging, path)
 
 

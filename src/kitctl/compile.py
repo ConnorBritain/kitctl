@@ -22,6 +22,7 @@ from kitctl.desired import Desired, DesiredError, Item, Primitive, server_config
 from kitctl.hashing import is_junk
 from kitctl.paths import Paths
 from kitctl.safemeta import canonical_hash
+from kitctl.secretscan import find
 
 MARKETPLACE = "kitctl"
 # ${NAME} or ${NAME:-default}, as Claude Code expands them in MCP config.
@@ -68,8 +69,14 @@ def raw_digest(path: Path) -> str:
 
 
 def source_files(directory: Path) -> dict[str, Path]:
-    """Files under ``directory`` by POSIX relative path, skipping junk and links."""
+    """Files under ``directory`` by POSIX relative path, skipping junk and links.
+
+    ``directory`` itself must not be a link: a linked ``files/`` could pull anything on the
+    machine (keys, other projects) into agent config or a committed marketplace.
+    """
     found: dict[str, Path] = {}
+    if directory.is_symlink():
+        raise ValueError(f"{directory} is a symlink; kitctl copies only real directories")
     if not directory.is_dir():
         return found
     stack = [directory]
@@ -86,6 +93,25 @@ def source_files(directory: Path) -> dict[str, Path]:
 
 
 # -- MCP translation ----------------------------------------------------------------------
+
+_SENSITIVE = re.compile(r"(token|key|secret|password|passwd|auth|credential|bearer|cookie)", re.I)
+
+
+def credential_problems(config: dict[str, Any]) -> list[str]:
+    """Literal credentials in a server definition (kitctl writes only ${NAME} references)."""
+    problems = []
+    found = find(json.dumps(config))
+    if found:
+        problems.append(f"contains what looks like a literal credential ({', '.join(found)})")
+    for table in ("env", "headers", "http_headers"):
+        for name, value in (config.get(table) or {}).items():
+            if isinstance(value, str) and "${" not in value and _SENSITIVE.search(name):
+                problems.append(f"{table}.{name} holds a literal value; use ${{{name.upper()}}}")
+    args = [str(a) for a in config.get("args") or []]
+    for flag, value in zip(args, args[1:], strict=False):
+        if flag.startswith("-") and _SENSITIVE.search(flag) and "${" not in value:
+            problems.append(f"the value after {flag} is literal; use an environment reference")
+    return problems
 
 
 def _neutral(config: dict[str, Any]) -> dict[str, Any]:
@@ -319,7 +345,13 @@ class _Compiler:
             self.gap(item, harness, "no .md or .rules files to install")
 
     def mcp(self, item: Item, harness: str, primitive: Primitive) -> None:
-        neutral = _neutral(server_config(primitive))
+        config = server_config(primitive)
+        problems = credential_problems(config)
+        if problems:
+            for problem in problems:
+                self.gap(item, harness, f"server.json {problem}; kitctl won't write it")
+            return
+        neutral = _neutral(config)
         filters = _filters(item, neutral, self.desired.filters.get(item.name, {}))
         neutral = {k: v for k, v in neutral.items() if k not in filters} | filters
         if harness == "claude":
@@ -368,6 +400,14 @@ class _Compiler:
         installed = base / "kitctl" / item.name
         command = spec.get("command", "{script}")
         script = spec.get("script")
+        if script and harness == "codex" and self.project:
+            self.gap(
+                item,
+                harness,
+                "a Codex project hook would need this machine's absolute "
+                "script path in a committed file; put the hook in core (user scope)",
+            )
+            return
         if script:
             self.tree(item, harness, primitive.directory / "files", installed)
             if harness == "claude" and self.project:
