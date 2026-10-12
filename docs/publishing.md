@@ -1,87 +1,62 @@
-# Publishing 0.0.1
+# Publishing kitctl
 
-## Verified release record — 2026-10-11
+## Release flow (0.1.0 onward)
 
-- [npm kitctl 0.0.1](https://www.npmjs.com/package/kitctl/v/0.0.1) is published
-  under connorbritain; registry integrity matches the locally tested tarball.
-- [TestPyPI kitctl 0.0.1](https://test.pypi.org/project/kitctl/0.0.1/) was published
-  by [the rehearsal workflow](https://github.com/ConnorBritain/kitctl/actions/runs/38142749776).
-- [PyPI kitctl 0.0.1](https://pypi.org/project/kitctl/0.0.1/) was published
-  by [the production workflow](https://github.com/ConnorBritain/kitctl/actions/runs/38142825980).
-- Both Python releases use tag v0.0.1, commit e1a0dde219043badf11d9208ee0bde895329a076.
-  Wheel and source archive SHA-256 hashes match exactly across the two indexes.
-- Fresh installs from all three registries passed --version and read-only inventory
-  against temporary repositories, with isolated HOME and agent config directories.
-- GitHub trusted publishers are active on both Python indexes; no local upload token
-  was created. Namespace reservation on npm and PyPI is complete.
+Releases are tag-driven through `.github/workflows/release.yml`. The version lives only in
+`src/kitctl/__init__.py` (PEP 440, e.g. `0.1.0rc1`); npm gets the semver form
+(`0.1.0-rc.1`) via `scripts/prepare_npm.py`. Pre-releases go to npm under the `next`
+dist-tag, so `npx kitctl` keeps resolving to the latest stable; stable releases go to `latest`.
 
-The remaining sections document the setup and release procedure. Do not rerun
-an upload of an already published version.
+1. On the release branch: set `__version__`, run `uv run python scripts/prepare_npm.py`
+   (after `uv build`) to update `npm/package.json`, and rename the CHANGELOG's
+   "Unreleased" heading to `## <version> — <date>`. `scripts/version.py --check` must pass.
+2. Push the tag: `git tag v0.1.0rc1 <commit> && git push origin v0.1.0rc1`.
+3. The workflow then:
+   - checks that tag, version, npm version, and CHANGELOG section agree;
+   - runs the full CI matrix (Linux, Windows, macOS × Python 3.11, 3.14);
+   - builds the wheel, sdist, and npm tarball once (with SHA256SUMS);
+   - installs those artifacts on all three OSes via `uv tool install`, `pipx install`,
+     and the npm tarball (with uv, and with the plain-Python fallback), running
+     `kitctl --version` and `kitctl doctor` in a sandbox HOME;
+   - publishes to **TestPyPI** (environment `testpypi`), installs from TestPyPI on all
+     three OSes, then publishes to **PyPI** (environment `pypi`) and **npm** (environment
+     `npm`), using the same artifacts;
+   - installs from the public registries on all three OSes and smoke-tests;
+   - creates the GitHub release with notes from the CHANGELOG section.
 
-The user's request authorizes immediate package name reservation through a useful
-first release. Do not call a namespace held until registry metadata verifies the
-version and owner. Empty packages are prohibited by
-[PyPI name-retention policy](https://docs.pypi.org/project-management/name-retention/).
+## One-time setup (account owner)
 
-## Account setup
+- **Required reviewers.** In GitHub → Settings → Environments, add yourself as a required
+  reviewer on `testpypi`, `pypi`, and `npm`. Every publish then waits for your approval in
+  the Actions run. Without reviewers, a pushed tag publishes automatically.
+- **PyPI/TestPyPI.** The existing trusted publishers name `publish-python.yml`. Add a
+  second trusted publisher on each index for workflow `release.yml` with the matching
+  environment (`testpypi` / `pypi`). Keep the old one for manual fallback.
+- **npm.** Preferred: on npmjs.com → kitctl → Settings → Trusted publishing, add GitHub
+  Actions publisher `ConnorBritain/kitctl`, workflow `release.yml`, environment `npm`
+  (requires npm CLI 11.5.1+, which the workflow installs). Fallback: create a granular
+  automation token limited to `kitctl` and store it as the `NPM_TOKEN` secret on the `npm`
+  environment. If neither is configured, the npm job fails and nothing else is affected;
+  publish manually:
 
-PyPI needs an account, verified email, and 2FA. TestPyPI is a separate service with
-its own account. Sign in or register:
+  ```sh
+  # from the release's artifacts (or a local build of the same tag)
+  npm publish kitctl-0.1.0-rc.1.tgz --access public --tag next
+  npm view kitctl dist-tags
+  ```
 
-- https://pypi.org/account/register/
-- https://test.pypi.org/account/register/
+- **Deprecate the leftover placeholder** (once rc1 is on npm):
 
-Prefer [pending trusted publishers](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
-for the first release, so no long-lived token has to be shared. On **each** registry,
-open Publishing, add a pending GitHub publisher with:
+  ```sh
+  npm deprecate kitctl@0.0.0-stage "Placeholder; install kitctl@latest or kitctl@next"
+  ```
 
-| Field | Value |
-|---|---|
-| PyPI project name | kitctl |
-| Owner | ConnorBritain |
-| Repository | kitctl |
-| Workflow filename | publish-python.yml |
-| Environment | testpypi on TestPyPI; pypi on PyPI |
+## Manual fallback
 
-A pending publisher alone does not reserve the project name. A successful first
-upload creates it. GitHub environments with those names should exist. The workflow
-supports explicit dispatch only and uses OIDC in the publishing job. Run it from
-the reviewed release tag, target TestPyPI first, install/test that result, then
-dispatch the same tag for PyPI. The workflow does not automatically enforce the
-cross-registry ordering; the release operator must verify TestPyPI success.
+`publish-python.yml` (workflow_dispatch) can still publish a reviewed tag to TestPyPI or
+PyPI by hand: `gh workflow run publish-python.yml --ref v0.1.0rc1 -f target=testpypi`.
 
-```sh
-gh workflow run publish-python.yml --ref v0.0.1 -f target=testpypi
-# After successful TestPyPI publication:
-uvx --index https://test.pypi.org/simple/ --from kitctl==0.0.1 kitctl --version
-# Then publish the same reviewed tag to production:
-gh workflow run publish-python.yml --ref v0.0.1 -f target=pypi
-uvx --from kitctl==0.0.1 kitctl --version
-```
+## Verified history
 
-## npm
-
-Build and verify the exact tarball:
-
-```sh
-uv sync --locked
-uv run pytest
-uv build
-uv run python scripts/prepare_npm.py
-npm --prefix npm test
-cd npm
-npm pack --dry-run
-npm pack
-npm publish kitctl-0.0.1.tgz --access public
-npm view kitctl@0.0.1 version maintainers dist.integrity
-```
-
-Publishing requires [2FA or an eligible granular token](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/).
-An authenticated `npm whoami` does not prove publish authorization. Let the account
-owner complete interactive authentication if required; don't copy tokens into the
-repository. The package includes only the launcher, wheel, README, and MIT license.
-No real inventory, warehouse content, or agent config belongs in either package.
-
-Both ecosystems publish public artifacts even if the source repository is private.
-For private source, use manual Python uploads or validate current registry support
-for that repository's trusted publishing before dispatch.
+- 0.0.1 (2026-10-11): npm, TestPyPI, and PyPI published and installation-tested; tag
+  v0.0.1, commit e1a0dde. Namespaces are held on npm and PyPI.

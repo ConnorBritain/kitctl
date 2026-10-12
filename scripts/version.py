@@ -55,7 +55,16 @@ def main() -> int:
         if not issues:
             print(f"version {version} consistent")
         return int(bool(issues))
-    print(f"pep440={version} semver={pep440_to_semver(version)} npm_tag={npm_dist_tag(version)}")
+    values = {
+        "pep440": version,
+        "semver": pep440_to_semver(version),
+        "npm_tag": npm_dist_tag(version),
+        "prerelease": str(npm_dist_tag(version) == "next").lower(),
+    }
+    if "--github-output" in sys.argv:
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+            handle.writelines(f"{key}={value}\n" for key, value in values.items())
+    print(" ".join(f"{key}={value}" for key, value in values.items()))
     return 0
 
 

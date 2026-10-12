@@ -1,4 +1,4 @@
-name: Publish Python
+name: Publish Python (manual fallback)
 on:
   workflow_dispatch:
     inputs:

@@ -1,136 +1,128 @@
 # kitctl
 
-kitctl (pronounced "kit control"; colloquially "kit") inventories the skills,
-MCP configuration, hooks, and plugins used by coding agents. The planned compiler
-manages named **loadouts** from a separate private warehouse and writes each
-harness's native configuration with an ownership ledger.
-The planned default warehouse location is `~/kits`; setup will ask which parent
-directories contain your repositories.
+kitctl (pronounced "kit control"; colloquially "kit") shows you every skill, MCP server,
+hook, plugin, and instruction file your coding agents use, in Claude Code and Codex,
+across all your repositories. It tells you where each one lives, whether you actually
+use it, and what is duplicated, drifted, or broken, then helps you decide what to keep
+and writes you a cleanup plan.
 
-**The 0.1.x line is read-only with respect to agent configuration.** It inventories
-what you have and where it lives; usage, reports, triage, and cleanup plans follow.
-It never modifies Claude Code or Codex configuration.
+**The 0.1.x line never modifies agent configuration.** It reads Claude Code and Codex
+config, writes only its own files (config, cache, reports) and, when you ask, your
+private warehouse (`~/kits`). Cleanup steps are a checklist you run yourself. Managing
+config from named loadouts (apply, purge, eject) is planned for 0.2.0.
 
-## Run
-
-Python 3.11+:
+## Install
 
 ```sh
-uv tool install kitctl          # or: pipx install kitctl
-kitctl init                     # asks for repo parent dirs (e.g. ~/Code) and ~/kits
-kitctl inventory                # user + managed config, plugins, and every discovered repo
-kitctl inventory --root ~/Code/app --json
-kitctl usage                    # skill/agent/command/MCP calls mined from session logs
-kitctl report --format html     # inventory x repo matrix, usage, findings (md|json|html)
-kitctl triage                   # decide core / loadout / retire / merge / keep per item
-kitctl plan                     # turn decisions into a manual cleanup checklist
-kitctl adopt <path|mcp:name>    # copy a primitive into ~/kits with provenance
-kitctl doctor                   # harness versions, paths, trust, hook latency risks
-kitctl conformance              # compare with `claude`/`codex` list commands (runs them)
-kitctl validate                 # warehouse loadouts and primitives (~/kits)
+uv tool install kitctl     # recommended
+pipx install kitctl        # or
+pip install kitctl         # Python 3.11+, no dependencies
+npx kitctl --help          # Node 20+: bundled wheel, run via uv or a local Python 3.11+
 ```
 
-From a checkout: `uv run kitctl ...`. Node 20+ with uv: `npx kitctl ...` (a thin launcher
-around the bundled wheel; don't use it from hooks, where startup latency matters).
+Use an installed `kitctl` (uv tool or pipx) for anything latency-sensitive such as
+agent hooks; the npm launcher's Node → Python startup is too slow for session-start hooks,
+and `kitctl doctor` flags hooks that call `npx kitctl`.
 
-`init` writes only kitctl's own config (`~/.config/kitctl/config.toml`, or
-`%APPDATA%\kitctl\config.toml`). `inventory` always reads user-level and managed
-Claude Code and Codex locations (honoring `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and
-`CLAUDE_CODE_PLUGIN_CACHE_DIR`), installed plugins and everything they provide, and
-project config in each repository: `--root` if given, else repositories discovered
-under the configured parents (depth 3, skipping `node_modules`, virtualenvs, and build
-dirs), else the current directory. See the
-[path table](docs/harness-reference.md#inventory-path-table-kitctl-010).
+## Workflow
 
-Output is metadata only. For MCP servers that means transport, command basename, URL
-host, and environment variable *names*; for hooks, event, matcher, command basename,
-and a hash of the command; for settings, the top-level keys. Values are never
-reported, and anything secret-shaped is redacted as a final guard. Links (symlinks and
-Windows junctions) are entries with their resolved target; kitctl reads through a link
-only into scanned repos, harness config dirs, or the warehouse. Hashes use scheme 2,
-which ignores line endings and junk files. The JSON report follows
-[docs/report.schema.json](docs/report.schema.json). A stat-keyed hash cache lives in
-kitctl's cache dir (`--no-cache` to skip).
+```sh
+kitctl init                       # where your repos live (e.g. ~/Code) and ~/kits
+kitctl report --format html       # everything, where it lives, usage, findings
+kitctl triage                     # decide core / loadout / retire / merge / keep
+kitctl plan                       # a manual cleanup checklist with exact commands
+```
 
-`usage` streams Claude Code transcripts (`$CLAUDE_CONFIG_DIR/projects/**/*.jsonl`) and,
-best effort, Codex session logs (`$CODEX_HOME/sessions`), keeping only identities (skill,
-subagent, slash command, MCP server and tool names), timestamps, and working directories
-for repo attribution. Prompts, outputs, and tool arguments are never stored or printed.
-A per-file byte offset makes repeat runs read only new lines.
+1. **`init`** asks which directories hold your repositories and where the warehouse is,
+   and writes kitctl's own config (`~/.config/kitctl/config.toml`;
+   `%APPDATA%\kitctl\config.toml` on Windows). Git worktrees are skipped by default.
+2. **`report`** combines inventory, usage, and analysis into Markdown, JSON, or one
+   self-contained HTML page, written to kitctl's cache dir (never into a repository).
+   For each item: its locations and content hashes, calls and last use (active, stale,
+   unused, or untracked), plus identical copies, drift, shadowing with the winning scope,
+   MCP servers sharing a command or host, usage of things no longer installed, and
+   health findings (enabled-but-missing plugins, MCP commands not on PATH, skills without
+   frontmatter, invalid JSON/TOML, broken links, stale project entries).
+3. **`triage`** walks each item with a proposal and its reason: merge differing copies,
+   core if used across repos, loadout if repo-specific, retire if stale or unused, keep if
+   there's no usage signal. Accept, override, skip, or quit and resume later. Decisions go
+   to `~/kits/triage.toml`; `--list` previews without writing.
+4. **`plan`** turns decisions into a checklist with exact paths and native commands
+   (`claude mcp remove <name> -s <scope>`, `codex mcp remove`, `claude plugin
+   disable|uninstall`), archive-then-remove steps for files, and loadout snippets. Nothing
+   is applied for you.
+5. **`adopt`** copies a primitive into the warehouse with its origin and hash and never
+   moves the original. MCP servers are stored with credentials replaced by `${NAME}`
+   references; adoption refuses anything that still looks like a secret.
 
-`report` writes to kitctl's cache dir (`~/.cache/kitctl/reports`, `~/Library/Caches/kitctl/reports`,
-or `%LOCALAPPDATA%\kitctl\Cache\reports`) and refuses `--out` inside a scanned repo unless
-`--force`. It shows each item with its locations and hashes, call counts and last use
-(active, stale after `stale_days`, or unused), and analysis: identical copies, drift (same
-name, different content), shadowing (same name at several scopes, with the winning scope),
-MCP servers sharing a command or host, and health findings such as enabled-but-missing
-plugins, MCP commands not on PATH, and skills without frontmatter.
+## All commands
 
-Git worktrees are skipped by default (`include_worktrees = true` or `--include-worktrees`
-to scan them). `--no-descriptions` (or `export_descriptions = false`) gives names-only
-exports. `kitctl doctor` reads harness versions from their install paths and never runs
-them; `doctor --probe` runs `--version`. `kitctl conformance` is the one command that runs
-harness CLIs, to compare their own listings with the inventory.
+| Command | What it does |
+|---|---|
+| `init` | First-run setup; writes only kitctl's config |
+| `inventory [--root PATH] [--json] [--timings]` | Read-only discovery |
+| `usage [--since DATE]` | Skill, agent, slash-command, and MCP calls from session logs |
+| `report [--format md\|json\|html] [--out DIR]` | Inventory × repo matrix, usage, findings |
+| `triage [--list] [--accept-proposals]` | Decide what to keep; saves to the warehouse |
+| `plan [--out DIR]` | Manual cleanup checklist from triage decisions |
+| `adopt <path\|mcp:name> [--to inbox\|primitives\|attic]` | Copy into the warehouse |
+| `validate` | Check warehouse loadouts, primitives, and triage.toml |
+| `doctor [--probe]` | Harness versions, paths, trust, hook latency risks |
+| `conformance [--health-checks]` | Compare with `claude`/`codex` list commands (runs them) |
 
-### Cleanup workflow
+Exit codes: 0 success (informational findings allowed), 1 completed with error findings,
+2 invalid arguments or environment. Common flags: `--no-cache`, `--include-worktrees`,
+`--no-descriptions` (names-only exports).
 
-1. `kitctl init`, then `kitctl report --format html` to see everything, where it lives,
-   whether you use it, and what is duplicated, drifted, or broken.
-2. `kitctl triage` walks each skill, agent, command, MCP server, plugin, hook, and rule
-   with a proposal and its reason (merge differing copies; core if used across repos;
-   loadout if repo-specific; retire if stale or unused; keep if there's no usage signal).
-   Accept, override, skip, or quit and resume later. Decisions are saved to
-   `~/kits/triage.toml`; `--list` previews proposals without writing.
-3. `kitctl plan` writes a Markdown checklist with exact paths and native commands
-   (`claude mcp remove -s <scope>`, `codex mcp remove`, `claude plugin disable|uninstall`)
-   and archive-then-remove steps for files. You run the steps yourself.
-4. `kitctl adopt` copies a primitive into the warehouse (`inbox/`, `primitives/`, or
-   `attic/`) with its origin and hash; it never moves the original. MCP servers are stored
-   with credentials replaced by `${NAME}` references, and adoption refuses anything that
-   still looks like a secret.
+## What kitctl reads, and what it never does
 
-Triage, plan, and adopt write only kitctl's own directories and the warehouse; no 0.1.x
-command changes agent configuration.
+- **Locations:** user and managed Claude Code and Codex config (honoring
+  `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CLAUDE_CODE_PLUGIN_CACHE_DIR`), installed plugins and
+  everything they provide, claude.ai-synced and Codex system skills, and project config in
+  each repository, including nested `CLAUDE.md`/`AGENTS.md` and skills. See the
+  [path table](docs/harness-reference.md#inventory-path-table-kitctl-010).
+- **Metadata only:** MCP transport, command basename, URL host, and environment variable
+  *names*; hook event, matcher, command basename, and a hash; settings' top-level keys;
+  skill names and descriptions (`--no-descriptions` drops those). Values are never
+  reported, and anything secret-shaped is redacted as a final guard.
+- **Usage:** only identities (skill, subagent, slash command, MCP server and tool names),
+  timestamps, and working directories. Prompts, outputs, and tool arguments are never
+  stored or printed. Repeat runs read only new log lines.
+- **No writes outside its own directories** (and the warehouse for triage/adopt), enforced
+  by a single guarded write path and by tests that fail on any other write.
+- **No harness CLIs executed**, except by `conformance` and `doctor --probe`, which say so.
+- **Links** (symlinks, Windows junctions) are recorded with their target and followed only
+  into scanned repositories, harness config dirs, or the warehouse.
+- **Content hashes** (scheme 2) ignore line endings, junk files, and vendored
+  dependency folders, so the same skill hashes alike on macOS, Linux, and Windows.
 
-Hooks must call an installed `kitctl` (`uv tool install kitctl` or `pipx install kitctl`),
-never `npx kitctl`: the Node → uv → Python chain cannot meet a session-start budget.
-`kitctl doctor` and `report` flag hooks that call `npx kitctl`.
-See [performance](docs/performance.md) for measured timings.
-
-Exit codes: 0 success (informational findings allowed), 1 completed with error
-findings (such as unreadable or invalid config), 2 invalid arguments or environment.
-Reports reveal private paths; keep them out of public source control.
+Reports contain private paths; keep them out of public repositories.
+[Performance](docs/performance.md) has measured timings.
 
 ## Develop
 
 ```sh
 uv sync --locked
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
-uv run pytest
-uv build
-uv run python scripts/prepare_npm.py
-npm --prefix npm test
-cd npm
-npm pack --dry-run
+uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest
+uv build && uv run python scripts/prepare_npm.py && npm --prefix npm test
+uv run python scripts/demo_sandbox.py     # end-to-end run against a throwaway HOME
+uv run python scripts/bench.py --realistic
 ```
 
-Tests use throwaway HOME, CODEX_HOME, CLAUDE_CONFIG_DIR, and repository fixtures.
-CI runs on Linux, Windows, and macOS with Python 3.11 and 3.14.
-The version lives only in `src/kitctl/__init__.py`; `scripts/version.py --check`
-fails CI if `npm/package.json` or the launcher disagree. A local pre-commit
-configuration and CI check reject common token formats and private keys. Install
-the hook with `uvx pre-commit install` if desired; this basic check is not a
-comprehensive secret scanner.
+Tests use throwaway HOME, CODEX_HOME, and CLAUDE_CONFIG_DIR fixtures. CI runs on Linux,
+Windows, and macOS with Python 3.11 and 3.14. The version lives only in
+`src/kitctl/__init__.py`; `scripts/version.py --check` fails CI on any mismatch. Releases
+are tag-driven ([publishing](docs/publishing.md)). A pre-commit hook and CI check reject
+common token formats (`uvx pre-commit install`).
 
-See [PLAN.md](PLAN.md), [design](docs/design.md),
-[harness reference](docs/harness-reference.md), and [publishing](docs/publishing.md).
+More: [PLAN.md](PLAN.md), [design](docs/design.md),
+[harness reference](docs/harness-reference.md),
+[real-environment runbook](docs/runbook-real-env.md).
 
 ## Naming
 
-kitctl ships only the `kitctl` command. AWS's Kubernetes Iteration Toolkit and
-Gravwell also use a `kitctl` binary; installing those tools alongside kitctl can
-cause PATH collisions. This project is independent of those projects and KitOps.
+kitctl ships only the `kitctl` command. AWS's Kubernetes Iteration Toolkit and Gravwell
+also use a `kitctl` binary; installing those alongside kitctl can cause PATH collisions.
+This project is independent of those projects and KitOps.
 
-MIT License. The code repository and private warehouse are deliberately separate.
+MIT License. The code repository and the private warehouse are deliberately separate.

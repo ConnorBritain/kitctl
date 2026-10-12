@@ -37,6 +37,7 @@ are tracked in [docs/followups.md](docs/followups.md).
 | 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Done on the 0.1.0 branch; macOS real-environment runs passed (read-only verified, conformance explained); Windows run pending |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | triage/plan/adopt built; awaiting a real triage run on the user's inventory |
+| 5b Distribution | npm launcher fallback (uv, then Python 3.11+), tag-driven release workflow with install matrix and gated publishes | Built; rc1 staged, awaiting publish approval |
 | 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
 | 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
 | 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |
