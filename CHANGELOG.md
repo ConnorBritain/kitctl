@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased (0.1.0 track)
+## 0.1.0rc1 — 2026-10-12
+
+First release candidate of the 0.1.0 cleanup release: read-only inventory, usage, reports,
+triage, cleanup plans, and adoption into a private warehouse for Claude Code and Codex.
+No command modifies agent configuration.
 
 Fixes from the first real-environment run (macOS, 60 repos, Claude Code 2.1.86, Codex
 0.153.4):

@@ -1,6 +1,6 @@
 {
   "name": "kitctl",
-  "version": "0.1.0-0.dev.0",
+  "version": "0.1.0-rc.1",
   "description": "kitctl: inventory and manage agent skills, MCP connectors, hooks, and loadouts",
   "type": "module",
   "bin": {
