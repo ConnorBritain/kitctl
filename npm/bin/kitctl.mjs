@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 
-const wheel = fileURLToPath(new URL("../python/kitctl-0.0.1-py3-none-any.whl", import.meta.url));
-if (!existsSync(wheel)) {
+const bundle = fileURLToPath(new URL("../python/", import.meta.url));
+let wheels = [];
+try {
+  wheels = readdirSync(bundle).filter((name) => /^kitctl-.+-py3-none-any\.whl$/.test(name));
+} catch {}
+if (wheels.length !== 1) {
   console.error("kitctl: bundled Python wheel is missing; reinstall the npm package.");
   process.exit(1);
 }
+const wheel = path.join(bundle, wheels[0]);
 const result = spawnSync("uvx", ["--from", wheel, "kitctl", ...process.argv.slice(2)], {
   stdio: "inherit",
   shell: false,

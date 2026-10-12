@@ -6,7 +6,7 @@ Do not interpret this document as permission to apply native configuration.
 ## Sources of truth
 
 The code lives in kitctl; actual skills, connectors, scripts, plugins, loadouts,
-captures, and retired content live in a separate private warehouse. `kit.yaml`
+captures, and retired content live in a separate private warehouse. `kit.toml`
 declares repo intent. `kit.lock` records the exact resolved warehouse commit,
 schema/compiler versions, and all Kit-owned effects. The agent proposes; a
 deterministic compiler plans, previews, and commits changes.
@@ -20,11 +20,16 @@ attic/, marketplace/. Nothing is retired by deleting warehouse content.
 
 ## Versioned model
 
-All YAML documents use schema_version: 1 and reject unknown fields. Names are
+Kit's hand-edited documents (`kit.toml`, `loadouts/*.toml`, triage decisions, user
+config) are TOML, read with stdlib `tomllib`; `kit.lock` is machine-written JSON with
+sorted keys. All use schema_version: 1 and reject unknown fields. Names are
 restricted to safe slug characters; references cannot contain traversal or escape
 their warehouse root. A primitive has kind, name, description, tags, harnesses,
 source provenance, and a SHA-256 content hash. Hashes cover all skill assets and
-normalized metadata, with a versioned hash scheme. Stable identities include kind
+normalized metadata, with a versioned hash scheme. Scheme 2 (0.1.0) normalizes
+CRLF/CR to LF in text files (no NUL in the first 8 KB), skips junk (.DS_Store,
+Thumbs.db, desktop.ini, __pycache__/, *.pyc, .git/), and hashes NFC-normalized
+POSIX relative paths. Changes that only touch line endings are intentionally invisible. Stable identities include kind
 and name to avoid collisions across primitive types.
 
 Loadouts have extends, skills, mcp, hooks, plugins. Resolve inheritance in a stable
@@ -33,7 +38,7 @@ reject incompatible overrides rather than silently taking the last definition.
 Core is explicit and user-scoped; repo selections cannot silently override core
 policy. Policy strength ultimately depends on native harness precedence/trust.
 
-`kit.yaml` selects loadouts, adds/removes primitives, and supplies per-server tool
+`kit.toml` selects loadouts, adds/removes primitives, and supplies per-server tool
 allowlists. Prefer qualified references such as skill:release-notes when names
 are ambiguous. MCP credentials are named environment references, never literals.
 The compiler rejects unrepresentable policies and emits a precise capability gap.
@@ -57,7 +62,7 @@ and line endings. Missing paths, symlinks, concurrent edits, changed ownership, 
 malformed config produce actionable conflicts, never silent takeover.
 
 Mutations support --dry-run with no filesystem effects and explicit scope. JSON
-edits preserve unrelated keys; TOML/YAML use comment-preserving libraries. Keep
+edits preserve unrelated keys; TOML edits (0.2.0) use tomlkit to preserve comments. Keep
 unchanged bytes where possible and track only insertions actually made.
 
 ## Compiler adapters

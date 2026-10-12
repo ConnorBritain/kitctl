@@ -1,4 +1,4 @@
-"""CLI for Kit's initial read-only release."""
+"""Command-line entry point: argument parsing and output only."""
 
 from __future__ import annotations
 
@@ -8,7 +8,43 @@ import sys
 from pathlib import Path
 
 from kitctl import __version__
-from kitctl.inventory import inventory
+
+EXIT_OK, EXIT_FINDINGS, EXIT_USAGE = 0, 1, 2
+
+
+def _inventory(args: argparse.Namespace) -> int:
+    from kitctl.inventory import inventory
+    from kitctl.secretscan import redact_obj
+
+    try:
+        report = inventory(args.roots or [Path.cwd()])
+    except (OSError, ValueError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    # Final guard: reports carry paths and metadata only, but a path can still look secret.
+    report, kinds = redact_obj(report)
+    if kinds:
+        report["findings"].append(
+            {
+                "severity": "warning",
+                "code": "secret-redacted",
+                "path": "",
+                "message": f"Redacted likely secrets from output ({', '.join(kinds)})",
+            }
+        )
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        for entry in report["entries"]:
+            suffix = f" -> {entry['link_target']}" if entry["link_target"] else ""
+            print(f"{entry['kind']:6}  {entry['name']}  {entry['path']}{suffix}")
+        print(f"{len(report['entries'])} items; no files changed.")
+        for finding in report["findings"]:
+            print(
+                f"{finding['severity']}: {finding['message']} [{finding['path']}]", file=sys.stderr
+            )
+    errors = any(finding["severity"] == "error" for finding in report["findings"])
+    return EXIT_FINDINGS if errors else EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,18 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Repository or home directory to inspect; repeatable. Defaults to current directory.",
     )
     scan.add_argument("--json", action="store_true", help="Print metadata and hashes as JSON.")
+    scan.set_defaults(handler=_inventory)
     args = parser.parse_args(argv)
-    try:
-        report = inventory(args.roots or [Path.cwd()])
-    except (OSError, ValueError) as error:
-        print(f"kitctl: {error}", file=sys.stderr)
-        return 2
-    if args.json:
-        print(json.dumps(report, indent=2))
-    else:
-        for entry in report["entries"]:
-            print(f"{entry['kind']:6}  {entry['name']}  {entry['path']}")
-        print(f"{len(report['entries'])} items; no files changed.")
-        for warning in report["warnings"]:
-            print(f"warning: {warning}", file=sys.stderr)
-    return 1 if report["warnings"] else 0
+    result: int = args.handler(args)
+    return result

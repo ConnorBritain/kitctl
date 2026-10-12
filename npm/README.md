@@ -39,10 +39,14 @@ run install scripts, or ship a `kit` binary. uv manages Python if needed.
 
 `inventory` defaults to the current directory. Repeat `--root` to inspect several
 repositories, or explicitly pass your home directory to include user config.
-There is no recursive search through unrelated repositories. Symlinked skills and
-configuration are skipped with warnings. JSON includes file paths and hashes,
-never configuration contents. Exit codes: 0 complete, 1 partial due to skipped
-items, 2 invalid arguments or roots. Reports may reveal private paths; keep them
+There is no recursive search through unrelated repositories. Links (symlinks and
+Windows junctions) are recorded as entries with their resolved target; Kit reads
+through a link only when the target is inside a scanned root, a harness config dir
+(`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `~/.agents`), or the warehouse. Broken links are
+findings. JSON includes paths, hashes (`hash_scheme` 2: line endings and junk files
+ignored), and findings, never configuration contents; likely secrets in output are
+redacted. Exit codes: 0 success (informational findings allowed), 1 completed with
+error findings, 2 invalid arguments or environment. Reports may reveal private paths; keep them
 out of public source control.
 
 ## Develop
@@ -61,7 +65,9 @@ npm pack --dry-run
 ```
 
 Tests use throwaway HOME, CODEX_HOME, CLAUDE_CONFIG_DIR, and repository fixtures.
-CI runs on Linux and Windows with Python 3.11 and 3.14. A local pre-commit
+CI runs on Linux, Windows, and macOS with Python 3.11 and 3.14.
+The version lives only in `src/kitctl/__init__.py`; `scripts/version.py --check`
+fails CI if `npm/package.json` or the launcher disagree. A local pre-commit
 configuration and CI check reject common token formats and private keys. Install
 the hook with `uvx pre-commit install` if desired; this basic check is not a
 comprehensive secret scanner.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kitctl"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Inventory and manage agent skills, MCP connectors, hooks, and loadouts."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,5 +45,8 @@ files = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.hatch.version]
+path = "src/kitctl/__init__.py"
+
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md", "/pyproject.toml"]
+include = ["/src", "/tests", "/scripts", "/README.md", "/LICENSE", "/CHANGELOG.md", "/pyproject.toml"]

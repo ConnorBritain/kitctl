@@ -2,20 +2,13 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
 
-PATTERNS = (
-    re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(rb"gh[pousr]_" + rb"[A-Za-z0-9_]{36,}"),
-    re.compile(rb"github_pat_" + rb"[A-Za-z0-9_]{50,}"),
-    re.compile(rb"pypi-" + rb"[A-Za-z0-9_-]{40,}"),
-    re.compile(rb"npm_" + rb"[A-Za-z0-9]{36,}"),
-    re.compile(rb"AKIA" + rb"[A-Z0-9]{16}"),
-    re.compile(rb"sk-(?:live|proj)-" + rb"[A-Za-z0-9_-]{24,}"),
-)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from kitctl.secretscan import find_bytes, is_config_name  # noqa: E402
 
 
 def main() -> int:
@@ -41,8 +34,11 @@ def main() -> int:
             data = path.read_bytes()
         else:
             continue
-        if any(pattern.search(data) for pattern in PATTERNS):
-            print(f"Likely secret found: {path} (value withheld)", file=sys.stderr)
+        kinds = find_bytes(data, config_context=is_config_name(path.name))
+        if kinds:
+            print(
+                f"Likely secret found: {path} ({', '.join(kinds)}; value withheld)", file=sys.stderr
+            )
             failed = True
     return int(failed)
 

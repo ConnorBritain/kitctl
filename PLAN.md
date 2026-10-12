@@ -7,7 +7,8 @@ requirements; it is not an independent grant of permission to change live config
 ## Decisions and boundaries
 
 - Python 3.11+, uv, argparse, zero runtime dependencies in 0.0.1.
-- Add tomlkit and ruamel.yaml when structured config editing begins; don't write
+- Kit's own files are TOML (stdlib tomllib) and kit.lock is JSON (confirmed 2026-10-12).
+  Add tomlkit only when 0.2.0 edits Codex config.toml; don't write
   generators before validating their target schemas and installed capabilities.
 - Binary/package: kitctl; document pre-existing AWS and Gravwell binary collisions.
   User confirmed keeping kitctl despite the collision.

@@ -1,17 +1,41 @@
 {
   "name": "kitctl",
-  "version": "0.0.1",
+  "version": "0.1.0-0.dev.0",
   "description": "Kit: inventory and manage agent skills, MCP connectors, hooks, and loadouts",
   "type": "module",
-  "bin": { "kitctl": "bin/kitctl.mjs" },
-  "files": ["bin/", "python/", "README.md", "LICENSE"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "kitctl": "bin/kitctl.mjs"
+  },
+  "files": [
+    "bin/",
+    "python/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT",
   "author": "Connor England",
-  "repository": { "type": "git", "url": "git+https://github.com/ConnorBritain/kitctl.git", "directory": "npm" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ConnorBritain/kitctl.git",
+    "directory": "npm"
+  },
   "homepage": "https://github.com/ConnorBritain/kitctl#readme",
   "bugs": "https://github.com/ConnorBritain/kitctl/issues",
-  "keywords": ["agents", "claude", "codex", "skills", "mcp"],
-  "scripts": { "test": "node --test test/*.test.mjs" },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" }
+  "keywords": [
+    "agents",
+    "claude",
+    "codex",
+    "skills",
+    "mcp"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }
