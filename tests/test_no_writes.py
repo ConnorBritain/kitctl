@@ -1,0 +1,45 @@
+"""Definition of done: no command writes agent configuration (bytes or mtimes)."""
+
+import os
+from pathlib import Path
+
+import pytest
+
+from kitctl.cli import main
+from kitctl.paths import resolve
+
+
+def snapshot(roots: list[Path], exclude: list[Path]) -> dict[str, tuple[bytes, int]]:
+    state = {}
+    for root in roots:
+        for path in root.rglob("*"):
+            if any(path == e or e in path.parents for e in exclude):
+                continue
+            if path.is_file() and not path.is_symlink():
+                state[str(path)] = (path.read_bytes(), os.stat(path).st_mtime_ns)
+    return state
+
+
+COMMANDS = [
+    ["--version"],
+    ["init", "--non-interactive", "--force"],
+    ["inventory"],
+    ["inventory", "--json"],
+    ["inventory", "--no-cache"],
+]
+
+
+@pytest.mark.parametrize("command", COMMANDS, ids=lambda c: " ".join(c))
+def test_command_leaves_agent_config_untouched(
+    harnesses: Path, tmp_path: Path, command: list[str]
+) -> None:
+    paths = resolve()
+    exclude = [paths.kit_config_dir, paths.kit_cache_dir]
+    roots = [tmp_path]
+    before = snapshot(roots, exclude)
+    assert before, "fixture should populate the sandbox"
+    try:
+        main(command)
+    except SystemExit:
+        pass
+    assert snapshot(roots, exclude) == before

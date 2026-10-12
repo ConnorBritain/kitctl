@@ -1,0 +1,13 @@
+{
+  "model": "{{CANARY}}",
+  "env": {"API_TOKEN": "{{CANARY}}"},
+  "enabledPlugins": {"deploy-tools@demo-market": true, "ghost@demo-market": true},
+  "hooks": {
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "API_KEY={{CANARY}} ~/bin/session-check --token {{CANARY}}"}]}
+    ],
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "npx kitctl capture"}]}
+    ]
+  }
+}

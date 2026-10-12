@@ -7,48 +7,46 @@ harness's native configuration with an ownership ledger.
 The planned default warehouse location is `~/kits`; setup will ask which parent
 directories contain your repositories.
 
-**0.0.1 is an early, read-only release.** It discovers skill folders and known
-configuration files in explicitly selected roots, computes SHA-256 hashes, and
-prints text or JSON. It does not yet parse connectors, count usage, compile
-loadouts, reconcile changes, or modify agent configuration.
+**The 0.1.x line is read-only with respect to agent configuration.** It inventories
+what you have and where it lives; usage, reports, triage, and cleanup plans follow.
+It never modifies Claude Code or Codex configuration.
 
 ## Run
 
 Python 3.11+:
 
 ```sh
-# From a checkout (works before the PyPI release):
-uv run kitctl --version
-uv run kitctl inventory --root /path/to/repo --json
-
-# After publication to PyPI:
-uvx kitctl --version
-uv tool install kitctl
+uv tool install kitctl          # or: pipx install kitctl
+kitctl init                     # asks for repo parent dirs (e.g. ~/Code) and ~/kits
+kitctl inventory                # user + managed config, plugins, and every discovered repo
+kitctl inventory --root ~/Code/app --json
 ```
 
-Node 20+ with [uv installed](https://docs.astral.sh/uv/getting-started/installation/):
+From a checkout: `uv run kitctl ...`. Node 20+ with uv: `npx kitctl ...` (a thin launcher
+around the bundled wheel; don't use it from hooks, where startup latency matters).
 
-```sh
-# After publication to npm:
-npx kitctl --version
-npx kitctl inventory --root /path/to/repo --json
-```
+`init` writes only kitctl's own config (`~/.config/kitctl/config.toml`, or
+`%APPDATA%\kitctl\config.toml`). `inventory` always reads user-level and managed
+Claude Code and Codex locations (honoring `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and
+`CLAUDE_CODE_PLUGIN_CACHE_DIR`), installed plugins and everything they provide, and
+project config in each repository: `--root` if given, else repositories discovered
+under the configured parents (depth 3, skipping `node_modules`, virtualenvs, and build
+dirs), else the current directory. See the
+[path table](docs/harness-reference.md#inventory-path-table-kitctl-010).
 
-The npm package is a thin launcher around the bundled Python wheel from the same
-release. It uses `uvx` with that local wheel; it does not require a PyPI release,
-run install scripts, or ship a `kit` binary. uv manages Python if needed.
+Output is metadata only. For MCP servers that means transport, command basename, URL
+host, and environment variable *names*; for hooks, event, matcher, command basename,
+and a hash of the command; for settings, the top-level keys. Values are never
+reported, and anything secret-shaped is redacted as a final guard. Links (symlinks and
+Windows junctions) are entries with their resolved target; kitctl reads through a link
+only into scanned repos, harness config dirs, or the warehouse. Hashes use scheme 2,
+which ignores line endings and junk files. The JSON report follows
+[docs/report.schema.json](docs/report.schema.json). A stat-keyed hash cache lives in
+kitctl's cache dir (`--no-cache` to skip).
 
-`inventory` defaults to the current directory. Repeat `--root` to inspect several
-repositories, or explicitly pass your home directory to include user config.
-There is no recursive search through unrelated repositories. Links (symlinks and
-Windows junctions) are recorded as entries with their resolved target; kitctl reads
-through a link only when the target is inside a scanned root, a harness config dir
-(`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `~/.agents`), or the warehouse. Broken links are
-findings. JSON includes paths, hashes (`hash_scheme` 2: line endings and junk files
-ignored), and findings, never configuration contents; likely secrets in output are
-redacted. Exit codes: 0 success (informational findings allowed), 1 completed with
-error findings, 2 invalid arguments or environment. Reports may reveal private paths; keep them
-out of public source control.
+Exit codes: 0 success (informational findings allowed), 1 completed with error
+findings (such as unreadable or invalid config), 2 invalid arguments or environment.
+Reports reveal private paths; keep them out of public source control.
 
 ## Develop
 

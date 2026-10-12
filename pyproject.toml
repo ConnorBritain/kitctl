@@ -28,7 +28,12 @@ Repository = "https://github.com/ConnorBritain/kitctl"
 Issues = "https://github.com/ConnorBritain/kitctl/issues"
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mypy>=1.15,<2"]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.11,<1",
+    "mypy>=1.15,<2",
+    "jsonschema>=4.23,<5",
+]
 
 [tool.ruff]
 target-version = "py311"

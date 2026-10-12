@@ -59,6 +59,30 @@ sandbox probes are required before claiming installed support.
   Plugin hooks require separate trust. Marketplace registration is documented via
   codex plugin marketplace add; don't infer file edits from a guessed schema.
 
+## Inventory path table (kitctl 0.1.0)
+
+Every location comes from `src/kitctl/paths.py`. "Verified" means checked against the
+code.claude.com pages cited above (fetched 2026-10-12) and Claude Code 2.1.296's CLI help
+in the cloud build; Codex rows are unverified until `docs/followups.md` is worked through.
+
+| Harness | Scope | Location | Kinds | Status |
+|---|---|---|---|---|
+| Claude | managed | `managed-settings.json`, `managed-mcp.json`, `CLAUDE.md` in `/Library/Application Support/ClaudeCode` (macOS), `/etc/claude-code` (Linux), `C:\Program Files\ClaudeCode` and legacy `C:\ProgramData\ClaudeCode` (Windows) | settings, hook, mcp_server, instructions | Verified (docs) |
+| Claude | user | `$CLAUDE_CONFIG_DIR` (default `~/.claude`): `settings.json`, `settings.local.json`, `CLAUDE.md`, `skills/`, `agents/`, `commands/`, `rules/`, `hooks/` | settings, hook, instructions, skill, agent, command, rules | Verified |
+| Claude | user | `skills/synced/<account>/<skill>/SKILL.md` (claude.ai-synced skills) | skill (`provided_by: claude.ai:synced`) | Observed in 2.1.296 |
+| Claude | user/local | `.claude.json` (in `$CLAUDE_CONFIG_DIR` when set, else `~/.claude.json`): `mcpServers` = user, `projects.<path>.mcpServers` = local | mcp_server | Verified |
+| Claude | plugin | `$CLAUDE_CODE_PLUGIN_CACHE_DIR` (default `~/.claude/plugins`): `installed_plugins.json` (`plugins.<id>[].installPath`), `known_marketplaces.json`, `cache/<marketplace>/<plugin>/<version>/`, `synced/` | plugin, marketplace, and each plugin's skills, agents, commands, hooks, MCP | Verified (docs); record shape read tolerantly |
+| Claude | user | `skills/<dir>/.claude-plugin/plugin.json` (`<name>@skills-dir`) | plugin | Verified (docs) |
+| Claude | project | `.claude/settings.json`, `.mcp.json`, `.claude/{skills,agents,commands,rules,hooks}`, `CLAUDE.md`, `.claude/CLAUDE.md`, nested `CLAUDE.md` and `.claude/skills` | settings, mcp_server, hook, skill, agent, command, rules, instructions | Verified |
+| Claude | local | `.claude/settings.local.json`, `CLAUDE.local.md` | settings, instructions | Verified |
+| Codex | managed | `/etc/codex/*.toml`, `/etc/codex/skills` | settings, mcp_server, skill | Unverified |
+| Codex | user | `$CODEX_HOME` (default `~/.codex`): `config.toml` (`mcp_servers`, `projects.<path>.trust_level`), `hooks.json`, `AGENTS.md`, `AGENTS.override.md`, `rules/`, `plugins/`, legacy `skills/`; `~/.agents/skills` | settings, mcp_server, hook, instructions, rules, plugin, skill | Unverified |
+| Codex | project | `.codex/config.toml`, `.codex/hooks.json`, `AGENTS.md` (harness `shared`), `AGENTS.override.md`, `.agents/skills`, nested `AGENTS*.md` and `.agents/skills` | settings, mcp_server, hook, instructions, skill | Unverified |
+
+Phase 4 conformance will compare against `claude mcp list` (no JSON flag in 2.1.296;
+lists pending `.mcp.json` approvals) and `claude plugin list --json`, plus
+`codex mcp list` once its output is confirmed.
+
 ## Consequences for the brief
 
 The proposed Codex hook locations are documented, but activation needs explicit

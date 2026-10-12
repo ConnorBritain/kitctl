@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "plugins": {
+    "deploy-tools@demo-market": [
+      {"scope": "user", "installPath": "{{PLUGINS}}/cache/demo-market/deploy-tools/1.2.0", "version": "1.2.0", "installedAt": "2026-10-01T00:00:00Z"}
+    ],
+    "vanished@demo-market": [
+      {"scope": "project", "projectPath": "{{REPO}}", "installPath": "{{PLUGINS}}/cache/demo-market/vanished/0.1.0", "version": "0.1.0"}
+    ]
+  }
+}

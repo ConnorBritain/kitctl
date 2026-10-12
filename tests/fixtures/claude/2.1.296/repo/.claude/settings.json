@@ -1,0 +1,1 @@
+{"permissions": {"allow": ["Bash(npm test)"]}, "enabledPlugins": {"deploy-tools@demo-market": false}}

@@ -1,0 +1,10 @@
+{
+  "oauthAccount": {"emailAddress": "{{CANARY}}"},
+  "mcpServers": {
+    "github": {"type": "stdio", "command": "/usr/local/bin/github-mcp", "args": ["--token", "{{CANARY}}"], "env": {"GITHUB_TOKEN": "{{CANARY}}"}},
+    "sentry": {"type": "http", "url": "https://user:{{CANARY}}@mcp.sentry.dev/mcp?key={{CANARY}}", "headers": {"Authorization": "Bearer {{CANARY}}"}}
+  },
+  "projects": {
+    "{{REPO}}": {"mcpServers": {"local-db": {"command": "npx", "args": ["db-mcp", "{{CANARY}}"]}}, "allowedTools": []}
+  }
+}

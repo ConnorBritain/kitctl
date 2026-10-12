@@ -7,7 +7,7 @@ import pytest
 from kitctl import __version__
 from kitctl.cli import main
 from kitctl.inventory import inventory
-from tests.conftest import link
+from tests.conftest import link, validate
 
 
 def snapshot(root: Path) -> dict[str, bytes]:
@@ -26,7 +26,8 @@ def test_inventory_reads_hashes_without_writes_or_secret_values(sandbox: Path) -
     config.write_text('{"token": "fixture-secret-value"}')
     before = snapshot(sandbox)
     report = inventory([sandbox, sandbox])
-    assert len(report["entries"]) == 2
+    validate(report)
+    assert {entry["kind"] for entry in report["entries"]} == {"skill", "settings"}
     assert report["findings"] == []
     assert report["hash_scheme"] == 2
     assert all(entry["hash_scheme"] == 2 for entry in report["entries"])
@@ -58,10 +59,10 @@ def test_link_outside_allowed_roots_is_recorded_not_read(sandbox: Path, tmp_path
     link(sandbox / ".mcp.json", outside / "SKILL.md")
     report = inventory([sandbox])
     links = by_kind(report, "link")
-    assert {entry["name"] for entry in links} == {".agents/skills/linked", ".mcp.json"}
+    assert {entry["name"] for entry in links} == {"linked", ".mcp.json"}
     assert all(entry["content_hash"] is None for entry in links)
     assert all(entry["target_in_scan"] is False for entry in links)
-    assert by_kind(report, "skill") == [] and by_kind(report, "config") == []
+    assert by_kind(report, "skill") == [] and by_kind(report, "settings") == []
     assert {finding["code"] for finding in report["findings"]} == {"external-link"}
     assert main(["inventory", "--json"]) == 0
 
@@ -76,13 +77,14 @@ def test_link_into_harness_dir_is_read_through(sandbox: Path, tmp_path: Path) ->
     link(sandbox / ".claude/skills/shared", shared)
     link(sandbox / ".claude/settings.json", claude / "settings.json")
     report = inventory([sandbox])
-    skill = by_kind(report, "skill")[0]
+    skill = [e for e in by_kind(report, "skill") if e["scope"] == "project"][0]
     assert skill["name"] == "shared" and skill["content_hash"]
     assert skill["link_target"] == str(shared.resolve())
-    config = by_kind(report, "config")[0]
+    config = [e for e in by_kind(report, "settings") if e["repo"]][0]
     assert config["name"] == ".claude/settings.json" and config["content_hash"]
     assert len(by_kind(report, "link")) == 2
     assert report["findings"] == []
+    validate(report)
 
 
 def test_linked_skills_directory_and_in_root_targets(sandbox: Path) -> None:
@@ -111,6 +113,7 @@ def test_link_cycle_inside_skill_terminates(sandbox: Path) -> None:
     link(skill / "self", skill)
     report = inventory([sandbox])
     assert [entry["name"] for entry in by_kind(report, "skill")] == ["loop"]
+    validate(report)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Junctions are Windows-only")
@@ -123,7 +126,7 @@ def test_windows_junction_is_a_link(sandbox: Path, tmp_path: Path) -> None:
     (sandbox / ".agents/skills").mkdir(parents=True)
     _winapi.CreateJunction(str(target), str(sandbox / ".agents/skills/junctioned"))
     report = inventory([sandbox])
-    assert by_kind(report, "link")[0]["name"] == ".agents/skills/junctioned"
+    assert by_kind(report, "link")[0]["name"] == "junctioned"
     assert by_kind(report, "skill")[0]["content_hash"]
 
 

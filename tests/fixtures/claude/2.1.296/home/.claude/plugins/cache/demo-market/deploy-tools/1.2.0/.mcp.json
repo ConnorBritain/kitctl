@@ -1,0 +1,1 @@
+{"mcpServers": {"deploy-status": {"type": "sse", "url": "https://status.example.com/sse"}}}

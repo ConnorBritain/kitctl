@@ -12,6 +12,15 @@
   guards inventory output.
 - Report schema 2 (`findings` replaces `warnings`); exit 1 only for error findings.
 - CI adds macOS.
+- `kitctl init` writes kitctl's TOML user config (repo parents, warehouse, depth).
+- Inventory adapters for Claude Code (managed/user/project/local settings, `.claude.json`
+  MCP scopes, skills including claude.ai-synced, agents, commands, rules, hook scripts,
+  installed plugins and marketplaces with everything they provide) and Codex (best
+  effort: config layers, MCP, hooks, AGENTS files, rules, plugins, skills, trust).
+- Safe metadata only (names, hosts, basenames, hashes); report JSON Schema in docs.
+- Repository discovery under configured parents; nested CLAUDE.md/AGENTS.md and skills.
+- Findings: invalid JSON/TOML, broken links, missing plugin installs, untrusted Codex
+  projects, case-only name collisions, hooks that call `npx kitctl`.
 
 ## 0.0.1 — 2026-10-11
 

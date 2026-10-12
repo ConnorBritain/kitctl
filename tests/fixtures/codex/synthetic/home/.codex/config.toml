@@ -1,0 +1,15 @@
+model = "{{CANARY}}"
+
+[mcp_servers.docs]
+command = "/usr/bin/docs-mcp"
+args = ["--key", "{{CANARY}}"]
+env = { API_KEY = "{{CANARY}}" }
+enabled_tools = ["search", "fetch"]
+
+[mcp_servers.remote]
+url = "https://mcp.example.org/v1"
+bearer_token_env_var = "REMOTE_TOKEN"
+disabled_tools = ["delete"]
+
+[projects."{{REPO}}"]
+trust_level = "trusted"

@@ -1,0 +1,1 @@
+{"mcpServers": {"github": {"command": "/opt/github-mcp", "env": {"GITHUB_TOKEN": "{{CANARY}}"}}, "docs": {"type": "http", "url": "https://docs.example.com/mcp"}}}

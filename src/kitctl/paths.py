@@ -26,6 +26,7 @@ class Paths:
     home: Path
     claude_config_dir: Path
     claude_json: Path
+    claude_plugins_dir: Path
     codex_home: Path
     agents_home: Path
     kit_config_dir: Path
@@ -37,7 +38,7 @@ class Paths:
     @property
     def harness_dirs(self) -> tuple[Path, ...]:
         """Directories whose contents kitctl may read through links."""
-        return (self.claude_config_dir, self.codex_home, self.agents_home)
+        return (self.claude_config_dir, self.claude_plugins_dir, self.codex_home, self.agents_home)
 
     @property
     def kit_config_file(self) -> Path:
@@ -51,6 +52,18 @@ class Paths:
 def _env_path(env: Mapping[str, str], name: str) -> Path | None:
     value = env.get(name, "").strip()
     return Path(value).expanduser() if value else None
+
+
+def _managed(platform: str, env: Mapping[str, str]) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    """System-wide managed policy directories for (Claude Code, Codex)."""
+    if platform == "windows":
+        program_files = _env_path(env, "ProgramFiles") or Path("C:/Program Files")
+        program_data = _env_path(env, "ProgramData") or Path("C:/ProgramData")
+        # ProgramData is the legacy location, still read by older versions.
+        return (program_files / "ClaudeCode", program_data / "ClaudeCode"), ()
+    if platform == "macos":
+        return (Path("/Library/Application Support/ClaudeCode"),), (Path("/etc/codex"),)
+    return (Path("/etc/claude-code"),), (Path("/etc/codex"),)
 
 
 def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> Paths:
@@ -67,6 +80,8 @@ def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> 
     claude_dir = claude_override or home / ".claude"
     # With CLAUDE_CONFIG_DIR set, Claude Code keeps .claude.json inside that directory.
     claude_json = (claude_override or home) / ".claude.json"
+    # Plugin cache and install records; CLAUDE_CODE_PLUGIN_CACHE_DIR relocates them.
+    claude_plugins = _env_path(env, "CLAUDE_CODE_PLUGIN_CACHE_DIR") or claude_dir / "plugins"
     codex_home = _env_path(env, "CODEX_HOME") or home / ".codex"
 
     if platform == "windows":
@@ -74,13 +89,6 @@ def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> 
         local = _env_path(env, "LOCALAPPDATA") or home / "AppData" / "Local"
         kit_config = appdata / "kitctl"
         kit_cache = local / "kitctl" / "Cache"
-        program_files = _env_path(env, "ProgramFiles") or Path("C:/Program Files")
-        program_data = _env_path(env, "ProgramData") or Path("C:/ProgramData")
-        claude_managed: tuple[Path, ...] = (
-            program_files / "ClaudeCode",
-            program_data / "ClaudeCode",  # legacy location, still read by older versions
-        )
-        codex_managed: tuple[Path, ...] = ()
     else:
         kit_config = (_env_path(env, "XDG_CONFIG_HOME") or home / ".config") / "kitctl"
         xdg_cache = _env_path(env, "XDG_CACHE_HOME")
@@ -90,17 +98,14 @@ def resolve(env: Mapping[str, str] | None = None, system: str | None = None) -> 
             kit_cache = home / "Library" / "Caches" / "kitctl"
         else:
             kit_cache = home / ".cache" / "kitctl"
-        if platform == "macos":
-            claude_managed = (Path("/Library/Application Support/ClaudeCode"),)
-        else:
-            claude_managed = (Path("/etc/claude-code"),)
-        codex_managed = (Path("/etc/codex"),)
 
+    claude_managed, codex_managed = _managed(platform, env)
     return Paths(
         platform=platform,
         home=home,
         claude_config_dir=claude_dir,
         claude_json=claude_json,
+        claude_plugins_dir=claude_plugins,
         codex_home=codex_home,
         agents_home=home / ".agents",
         kit_config_dir=kit_config,
