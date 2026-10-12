@@ -1,4 +1,4 @@
-"""Build a throwaway Mac-like HOME and run `kitctl init` + `kitctl inventory` against it.
+"""Build a throwaway Mac-like HOME and run every kitctl command against it, write side included.
 
     uv run python scripts/demo_sandbox.py [--keep] [--repos N]
 
@@ -8,6 +8,7 @@ Uses the synthetic fixtures in tests/fixtures; touches nothing outside a temp di
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -57,6 +58,24 @@ def build(base: Path, repo_count: int) -> dict[str, str]:
     return env
 
 
+def write_core(home: Path) -> None:
+    loadouts = home / "kits/loadouts"
+    loadouts.mkdir(parents=True, exist_ok=True)
+    (loadouts / "core.toml").write_text(
+        'schema_version = 1\nname = "core"\nskills = ["writer"]\nmcp = ["sentry"]\n',
+        encoding="utf-8",
+    )
+
+
+def fingerprint(roots: list[Path]) -> dict[str, bytes]:
+    found: dict[str, bytes] = {}
+    for root in roots:
+        paths = [root] if root.is_file() else sorted(root.rglob("*")) if root.exists() else []
+        for path in paths:
+            found[str(path)] = path.read_bytes() if path.is_file() else b"<dir>"
+    return found
+
+
 def run(command: list[str], env: dict[str, str]) -> tuple[float, subprocess.CompletedProcess[str]]:
     start = time.perf_counter()
     result = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
@@ -93,6 +112,46 @@ def main() -> int:
             elapsed, result = run([*kitctl, *command], env)
             print(f"$ kitctl {' '.join(command)}   ({elapsed:.0f} ms, exit {result.returncode})")
             print((result.stdout + result.stderr).replace(str(base), "<sandbox>"))
+        # Write side: promote two primitives, declare core, apply, re-apply, purge.
+        home = Path(env["HOME"])
+        watched = [home / ".claude", home / ".claude.json", home / ".codex", home / ".agents"]
+        write_core(home)
+        for command in (
+            [
+                "adopt",
+                str(home / ".claude/skills/writer"),
+                "--to",
+                "primitives",
+                "--name",
+                "writer",
+            ],
+            ["adopt", "mcp:sentry", "--to", "primitives"],
+            ["apply", "--global", "--dry-run"],
+        ):
+            elapsed, result = run([*kitctl, *command], env)
+            print(f"$ kitctl {' '.join(command)}   ({elapsed:.0f} ms, exit {result.returncode})")
+            print((result.stdout + result.stderr).replace(str(base), "<sandbox>"))
+        # The user's sentry entry holds a literal credential, so apply refuses to take it over.
+        # Simulate the migration the conflict asks for: the user removes their entry.
+        claude_json = home / ".claude.json"
+        data = json.loads(claude_json.read_text("utf-8"))
+        data["mcpServers"].pop("sentry")
+        claude_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        print("(user removes their literal-credential sentry entry, as the conflict asks)\n")
+        baseline = fingerprint(watched)
+        for command in (
+            ["desired"],
+            ["apply", "--global", "--dry-run"],
+            ["apply", "--global", "--yes"],
+            ["status"],
+            ["apply", "--global", "--dry-run"],
+            ["purge", "--all", "--yes"],
+        ):
+            elapsed, result = run([*kitctl, *command], env)
+            print(f"$ kitctl {' '.join(command)}   ({elapsed:.0f} ms, exit {result.returncode})")
+            print((result.stdout + result.stderr).replace(str(base), "<sandbox>"))
+        restored = fingerprint(watched) == baseline
+        print(f"purge restored every config file byte for byte: {restored}")
         timings = [run([*kitctl, "inventory"], env)[0] for _ in range(3)]
         shown_timings = ", ".join(f"{t:.0f} ms" for t in timings)
         print(f"warm runs: {shown_timings} (includes interpreter start)")

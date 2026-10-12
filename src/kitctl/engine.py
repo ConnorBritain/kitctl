@@ -562,8 +562,10 @@ class Planner:
                 )
             else:
                 why = (
-                    "holds what look like literal credentials; move them to environment "
-                    "variables first"
+                    "holds what look like literal credentials, which kitctl won't overwrite or "
+                    "keep as a preimage. Put them in environment variables, remove this entry "
+                    "yourself (e.g. `claude mcp remove <name> -s user` or `codex mcp remove "
+                    "<name>`), then re-run apply"
                     if _secretish(current)
                     else "exists with different content and isn't kitctl's (pass --replace to "
                     "take it over; purge then restores the original)"
