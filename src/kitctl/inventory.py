@@ -59,7 +59,9 @@ def resolve_repos(
     settings: kit_config.UserConfig | None,
     include_worktrees: bool | None = None,
 ) -> tuple[list[Path], str, list[Path]]:
-    """``(repos, mode, skipped_worktrees)``."""
+    """``(repos, mode, skipped_worktrees)``. An empty list means user-level config only."""
+    if roots is not None and not roots:
+        return [], "user", []
     if roots:
         for root in roots:
             if not root.expanduser().is_dir():

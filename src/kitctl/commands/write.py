@@ -287,3 +287,79 @@ def _references(paths: Any, warehouse_marketplace: Path | None) -> list[str]:
         ):
             found.append(str(path))
     return found
+
+
+def capture(args: argparse.Namespace) -> int:
+    from kitctl import capture as kit_capture
+    from kitctl import engine
+    from kitctl import paths as kit_paths
+
+    paths = kit_paths.resolve()
+    try:
+        _recover_first(args, paths)
+        if args.action == "remove":
+            plan = engine.plan(kit_capture.OWNER, [], paths)
+            return _run(args, plan, paths, [], "Remove")
+        harnesses = tuple(args.harness or ("claude", "codex"))
+        command = kit_capture.executable(args.command)
+        effects = kit_capture.effects(paths, command, harnesses)
+        plan = engine.plan(kit_capture.OWNER, effects, paths)
+        notes = [
+            "reconcile copies hand-added items into the warehouse inbox; it never "
+            "activates or deletes anything",
+            "guard is a guardrail against accidental edits, not a security boundary",
+        ]
+        if "codex" in harnesses:
+            notes.append("Codex asks you to review the new hooks; kitctl never trusts them for you")
+        state = None
+        if not args.dry_run and not plan.conflicts:
+            # Items that exist now aren't "new"; reconcile captures later additions only.
+            state = kit_capture.baseline(paths, kit_capture.repo_for(Path.cwd()))
+        code = _run(args, plan, paths, notes, "Install capture hooks:")
+        if code == EXIT_OK and state is not None:
+            kit_capture.save_state(paths, state)
+        return code
+    except (engine.EngineError, OSError, ValueError) as error:
+        return _fail(error)
+
+
+def reconcile(args: argparse.Namespace) -> int:
+    from kitctl import capture as kit_capture
+
+    return kit_capture.run_reconcile(args.hook)
+
+
+def guard(args: argparse.Namespace) -> int:
+    from kitctl import capture as kit_capture
+
+    return kit_capture.run_guard(args.harness)
+
+
+def marketplace(args: argparse.Namespace) -> int:
+    from kitctl import desired as kit_desired
+    from kitctl import marketplace as kit_marketplace
+    from kitctl.warehouse import WarehouseMissing, resolve
+
+    try:
+        warehouse = kit_desired.Warehouse(resolve(args.warehouse))
+        planned = kit_marketplace.build(warehouse)
+    except (
+        WarehouseMissing,
+        kit_desired.DesiredError,
+        kit_marketplace.MarketplaceError,
+        OSError,
+    ) as error:
+        return _fail(error)
+    for note in planned["notes"]:
+        print(f"note: {note}")
+    plugins = ", ".join(planned["plugins"]) or "none"
+    if args.dry_run:
+        print(f"Dry run: {len(planned['plugins'])} plugins ({plugins}); nothing was written.")
+        return EXIT_OK
+    written, removed = kit_marketplace.write(warehouse, planned)
+    print(
+        f"{warehouse.root / 'marketplace'}: {len(planned['plugins'])} plugins ({plugins}); "
+        f"{written} files written, {removed} removed. Validate with "
+        "`claude plugin validate <path>`."
+    )
+    return EXIT_OK

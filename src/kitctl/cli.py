@@ -220,6 +220,33 @@ def main(argv: list[str] | None = None) -> int:
     recover_cmd.add_argument("--rollback", action="store_true", help="Undo instead of finish.")
     recover_cmd.set_defaults(handler="write:recover")
 
+    capture_cmd = commands.add_parser(
+        "capture", help="Add or remove kitctl's SessionStart/PreToolUse hooks."
+    )
+    capture_cmd.add_argument("action", choices=("install", "remove"))
+    capture_cmd.add_argument("--harness", action="append", choices=("claude", "codex"))
+    capture_cmd.add_argument("--command", help="kitctl command for hooks (default: from PATH).")
+    mutation(capture_cmd)
+    capture_cmd.set_defaults(handler="write:capture")
+
+    reconcile_cmd = commands.add_parser(
+        "reconcile", help="Copy hand-added items into the warehouse inbox (SessionStart hook)."
+    )
+    reconcile_cmd.add_argument("--hook", choices=("claude", "codex"), help="Read hook JSON.")
+    reconcile_cmd.set_defaults(handler="write:reconcile")
+
+    guard_cmd = commands.add_parser(
+        "guard", help="PreToolUse hook: stop agent edits to kitctl-managed files."
+    )
+    guard_cmd.add_argument("--harness", choices=("claude", "codex"), default="claude")
+    guard_cmd.set_defaults(handler="write:guard")
+
+    market = commands.add_parser("marketplace", help="Generate a Claude plugin marketplace.")
+    market.add_argument("action", choices=("build",))
+    market.add_argument("--warehouse", type=Path)
+    market.add_argument("--dry-run", action="store_true")
+    market.set_defaults(handler="write:marketplace")
+
     args = parser.parse_args(argv)
     module, name = args.handler.split(":")
     handler = getattr(importlib.import_module(f"kitctl.commands.{module}"), name)

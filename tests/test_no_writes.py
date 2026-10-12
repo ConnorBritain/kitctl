@@ -33,6 +33,14 @@ COMMANDS = [
     ["report", "--format", "json"],
     ["doctor"],
     ["validate"],
+    ["desired"],
+    ["status"],
+    ["apply", "--global", "--dry-run"],
+    ["purge", "--all", "--dry-run"],
+    ["eject", "--dry-run"],
+    ["capture", "install", "--dry-run", "--command", "kitctl"],
+    ["marketplace", "build", "--dry-run"],
+    ["guard"],
 ]
 
 

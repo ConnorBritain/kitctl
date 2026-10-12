@@ -23,7 +23,7 @@ import os
 import re
 import shutil
 import uuid
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -201,7 +201,14 @@ class Document:
         container[identity[-1]] = _toml_value(value) if self.fmt == "toml" else value
         return created
 
-    def delete(self, op: str, identity: tuple[str, ...], prune: int, prefix: str = "") -> None:
+    def delete(
+        self,
+        op: str,
+        identity: tuple[str, ...],
+        created: Collection[tuple[str, ...]],
+        prefix: str = "",
+    ) -> None:
+        """Remove an entry, then any containers above it that kitctl created and left empty."""
         if op == "block":
             self._delete_block(identity[0], prefix)
             return
@@ -214,8 +221,10 @@ class Document:
         elif isinstance(container, dict):
             container.pop(identity[-1], None)
         parents = identity[:-1]
-        for depth in range(prune):
+        for depth in range(len(parents)):
             keys = parents[: len(parents) - depth]
+            if keys not in created:
+                break
             holder, _ = self._container(keys[:-1], False)
             node = holder.get(keys[-1]) if isinstance(holder, dict) else None
             if node is not None and len(node) == 0:
@@ -387,6 +396,18 @@ def _record(effect: Effect, value_hash: str, **extra: Any) -> dict[str, Any]:
         "applied_at": now(),
         **extra,
     }
+
+
+def _created_prefixes(record: dict[str, Any]) -> set[tuple[str, ...]]:
+    """Container key paths kitctl created when it inserted ``record``."""
+    parents = tuple(record["identity"][:-1])
+    count = int(record.get("created_parents", 0))
+    return {parents[: len(parents) - depth] for depth in range(min(count, len(parents)))}
+
+
+def _files(effect: Effect) -> dict[str, Any]:
+    """Tree records list their files so the guard hook needn't walk directories."""
+    return {"files": sorted(effect.value)} if effect.op == "tree" else {}
 
 
 def _effect_from(record: dict[str, Any]) -> Effect:
@@ -570,12 +591,13 @@ class Planner:
             else:
                 change.action = "remove"
                 document.trim_tail(record.get("file_tail"))
-                document.delete(
-                    base.op,
-                    base.identity,
-                    int(record.get("created_parents", 0)),
-                    record.get("block_prefix", ""),
-                )
+                made = {
+                    prefix
+                    for other in self.owned.values()
+                    if other["target"] == record["target"]
+                    for prefix in _created_prefixes(other)
+                }
+                document.delete(base.op, base.identity, made, record.get("block_prefix", ""))
                 if record.get("created_file"):
                     self.created.add(base.target)
         self.plan.changes.append(change)
@@ -646,7 +668,11 @@ class Planner:
                 else:
                     change.action = "adopt"
                     self.plan.changes.append(change)
-                    self.keep(key, _record(effect, desired_hash, preexisting=True, created_dirs=[]))
+                    self.keep(
+                        key,
+                        _record(effect, desired_hash, preexisting=True, created_dirs=[])
+                        | _files(effect),
+                    )
                 return
             change.action = "update" if present else ("restore" if record else "add")
             change.after = effect.value
@@ -660,7 +686,8 @@ class Planner:
             self.keep(
                 key,
                 (record or {})
-                | _record(effect, desired_hash, preexisting=False, created_dirs=created_dirs),
+                | _record(effect, desired_hash, preexisting=False, created_dirs=created_dirs)
+                | _files(effect),
             )
             return
         assert record is not None
@@ -1079,23 +1106,6 @@ def status(paths: Paths, owners: Iterable[str] | None = None) -> list[dict[str, 
             }
         )
     return rows
-
-
-def owned_paths(paths: Paths) -> set[str]:
-    """Every file kitctl owns (for the guard hook): targets, tree files, locks, ledger."""
-    ledger = Ledger(paths)
-    found = {str(ledger.path)}
-    for record in ledger.records.values():
-        target = Path(record["target"])
-        if record["op"] == "tree":
-            found.update(str(target / rel) for rel in (_tree_state(target) or {}))
-        elif record["op"] in ("file",):
-            found.add(str(target))
-        elif record["op"] == "json-key" or record["op"] == "toml-key":
-            continue  # shared files: kitctl owns entries, not the file
-        if record["owner"] not in ("user",) and not record["owner"].startswith("capture"):
-            found.add(str(Path(record["owner"]) / LOCK_FILE))
-    return found
 
 
 # -- eject ----------------------------------------------------------------------------------

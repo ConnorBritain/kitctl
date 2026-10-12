@@ -51,13 +51,14 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(staging, path)
 
 
-def write_bytes(path: Path, data: bytes) -> None:
-    """Write ``data`` to ``path`` (inside an allowed root), owner-readable only."""
+def write_bytes(path: Path, data: bytes, mode: int = 0o600) -> None:
+    """Write ``data`` to ``path`` (inside an allowed root); owner-only unless ``mode``."""
     check(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+    fd = os.open(path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, mode)
     with os.fdopen(fd, "wb") as handle:
         handle.write(data)
+    os.chmod(path, mode)
 
 
 def copy_file(source: Path, target: Path) -> None:
