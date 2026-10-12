@@ -63,6 +63,22 @@ resolves (HTTP 200), and `developers.openai.com/codex/*` redirects to these
   Plugin hooks require separate trust. Marketplace registration is documented via
   codex plugin marketplace add; don't infer file edits from a guessed schema.
 
+## Write targets verified for 0.1.0 (2026-10-12)
+
+- Codex `[mcp_servers.<id>]` keys used by the compiler (`command`, `args`, `env`,
+  `env_vars`, `url`, `http_headers`, `bearer_token_env_var`, `env_http_headers`,
+  `enabled_tools`, `disabled_tools`) and hook events/fields (`PreToolUse`,
+  `SessionStart`, `matcher`, `hooks`, `type`, `command`, `timeout`) appear in the config
+  schema of the Codex 0.153.4 binary (`RawMcpServerConfig`, `HookHandlerConfig`).
+  Hook trust lives in `trusted_hash` state that kitctl never writes.
+- Claude Code: `.mcp.json` expands `${VAR}` and `${VAR:-default}` in command, args, env,
+  url, and headers; `enabledPlugins` and `extraKnownMarketplaces` (`directory` source)
+  per settings reference; PreToolUse `permissionDecision` allow/deny/ask/defer;
+  SessionStart stdout becomes context, so reconcile reports through `systemMessage`.
+  Generated marketplaces pass `claude plugin validate` on 2.1.296.
+- Still to observe on a real machine: Codex loading `env_vars` and `env_http_headers`
+  from a kitctl-written table, and its hook review prompt for kitctl's hooks.
+
 ## Inventory path table (kitctl 0.1.0)
 
 Every location comes from `src/kitctl/paths.py`. "Verified" means checked against the

@@ -37,6 +37,14 @@ So warm inventory spends about 0.5 s in kitctl itself, on the 500 ms budget line
 pass is dominated by hashing the Codex plugin cache once; later passes reuse the stat-keyed
 cache (3,951 cached files, 0 hashed).
 
+## Hooks
+
+Measured 2026-10-12 in the cloud build container through an installed kitctl (venv
+console script), median of 9 runs: `kitctl reconcile --hook claude` with nothing new
+85 ms, `kitctl guard` 60 ms, `kitctl --version` 44 ms. The reconcile budget is 300 ms
+warm; it compares a stat fingerprint of the watched locations and runs inventory only
+when one changed.
+
 ## Where warm inventory time goes (synthetic load)
 
 `kitctl inventory --timings` prints a per-phase breakdown. On this workload: about half is

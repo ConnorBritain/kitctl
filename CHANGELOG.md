@@ -2,9 +2,29 @@
 
 ## 0.1.0rc1 — 2026-10-12
 
-First release candidate of the 0.1.0 cleanup release: read-only inventory, usage, reports,
-triage, cleanup plans, and adoption into a private warehouse for Claude Code and Codex.
-No command modifies agent configuration.
+First release candidate of 0.1.0: inventory, usage, reports, triage, cleanup plans, and
+adoption into a private warehouse for Claude Code and Codex, plus the write engine that
+installs loadouts from that warehouse.
+
+Write engine (only these commands change agent configuration, each with a diff first,
+`--dry-run`, and a prompt):
+
+- `kitctl desired` resolves `loadouts/core.toml` (user scope) and a repository's
+  `kit.toml` (loadouts, `[add]`/`[remove]`, `[mcp.<server>]` tool filters).
+- `kitctl apply --global | --repo PATH` installs skills (copied), agents, commands,
+  rules, MCP servers (Claude JSON and Codex TOML with comments kept; credentials stay
+  `${NAME}` references), hooks with their scripts, plugins, and `AGENTS.md` blocks.
+  Unrepresentable policies fail the plan with a reason.
+- An ownership ledger and per-repository `kit.lock` (hashes only); foreign or drifted
+  content is a conflict; `--replace` takes over an entry and purge restores it.
+- Journaled, staged, atomic writes; `kitctl recover [--rollback]`; `kitctl status`.
+- `kitctl purge` restores the original bytes; `kitctl eject` leaves plain native config.
+- `kitctl capture install|remove`, `kitctl reconcile` (SessionStart: hand-added items to
+  the warehouse inbox), `kitctl guard` (PreToolUse: protects kitctl-managed files).
+- `kitctl marketplace build` (Claude plugin marketplace, one plugin per loadout).
+- tomlkit 0.13.3 vendored; kitctl still has no runtime dependencies.
+- Release workflow: dry-run mode for branch pushes and manual runs; npm tarballs are
+  installed and published by path.
 
 Fixes from the first real-environment run (macOS, 60 repos, Claude Code 2.1.86, Codex
 0.153.4):

@@ -8,8 +8,10 @@ requirements; it is not an independent grant of permission to change live config
 
 - Python 3.11+, uv, argparse, zero runtime dependencies in 0.0.1.
 - kitctl's own files are TOML (stdlib tomllib) and kit.lock is JSON (confirmed 2026-10-12).
-  Add tomlkit only when 0.2.0 edits Codex config.toml; don't write
-  generators before validating their target schemas and installed capabilities.
+  tomlkit 0.13.3 is vendored (2026-10-12) for comment-preserving Codex config.toml edits;
+  target schemas are checked against docs, the Codex binary, and `claude plugin validate`.
+- 0.1.0 ships the write engine too (user decision 2026-10-12: nobody has used the product,
+  so no separate 0.2.0); rc1 waits for the sandbox acceptance suite and a pilot repo.
 - Binary/package: kitctl; document pre-existing AWS and Gravwell binary collisions.
   User confirmed keeping kitctl despite the collision.
 - MIT, copyright Connor England (authenticated GitHub identity).
@@ -38,10 +40,10 @@ are tracked in [docs/followups.md](docs/followups.md).
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Done on the 0.1.0 branch; macOS real-environment runs passed (read-only verified, conformance explained); Windows run pending |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | triage/plan/adopt built; awaiting a real triage run on the user's inventory |
 | 5b Distribution | npm launcher fallback (uv, then Python 3.11+), tag-driven release workflow with install matrix and gated publishes | Built; rc1 staged, awaiting publish approval |
-| 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
-| 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
-| 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |
-| 9 Removal | Purge restores baseline; eject preserves effective config with zero kitctl dependencies | Ledger/removal tests must precede first real apply |
+| 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Built and sandbox-proven (desired, compiler, ledger, journaled apply, recover, status); no real apply yet |
+| 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Built: capture install/remove, reconcile (85 ms warm), guard (60 ms), marketplace build |
+| 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice; runbook v3 has the pilot script |
+| 9 Removal | Purge restores baseline; eject preserves effective config with zero kitctl dependencies | Built; purge byte-exact and eject proven in the sandbox suite |
 
 Implement and prove the ledger, conflicts, interrupted-write recovery, purge, and
 eject in the sandbox before any real apply, rather than leaving those proofs until

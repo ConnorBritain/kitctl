@@ -3,13 +3,13 @@
 kitctl (pronounced "kit control"; colloquially "kit") shows you every skill, MCP server,
 hook, plugin, and instruction file your coding agents use, in Claude Code and Codex,
 across all your repositories. It tells you where each one lives, whether you actually
-use it, and what is duplicated, drifted, or broken, then helps you decide what to keep
-and writes you a cleanup plan.
+use it, and what is duplicated, drifted, or broken, helps you decide what to keep, and
+then installs the keepers from one private warehouse (`~/kits`) as named loadouts.
 
-**The 0.1.x line never modifies agent configuration.** It reads Claude Code and Codex
-config, writes only its own files (config, cache, reports) and, when you ask, your
-private warehouse (`~/kits`). Cleanup steps are a checklist you run yourself. Managing
-config from named loadouts (apply, purge, eject) is planned for 0.2.0.
+**Reading never changes anything.** `inventory`, `usage`, `report`, `triage`, `plan`,
+and `adopt` write only kitctl's own files and, when you ask, the warehouse. Only `apply`,
+`purge`, `eject`, `capture`, and `recover` change agent configuration, and each one shows
+the exact changes first, supports `--dry-run`, and asks before writing.
 
 ## Install
 
@@ -55,6 +55,43 @@ kitctl plan                       # a manual cleanup checklist with exact comman
    moves the original. MCP servers are stored with credentials replaced by `${NAME}`
    references; adoption refuses anything that still looks like a secret.
 
+## Install from the warehouse (apply)
+
+```sh
+kitctl desired --repo .              # what the warehouse says this repo should get
+kitctl apply --global --dry-run      # core loadout at user scope: show the diff
+kitctl apply --global                # ...and apply it after a prompt
+kitctl apply --repo .                # this repository's kit.toml
+kitctl status                        # what kitctl owns, and whether anything drifted
+kitctl purge --repo .                # remove exactly what kitctl added here
+kitctl eject                         # keep everything as plain config; stop managing it
+```
+
+- **Warehouse:** `primitives/<kind>/<name>/` (from `kitctl adopt`), `loadouts/<name>.toml`
+  (`skills`, `agents`, `commands`, `rules`, `mcp`, `hooks`, `plugins`, `extends`).
+  `loadouts/core.toml` is installed at user scope by `apply --global`.
+- **`kit.toml`** in a repository: `loadouts = ["web"]`, optional `harnesses = ["claude"]`,
+  `[add]`/`[remove]` lists, and `[mcp.<server>]` `enabled_tools`/`disabled_tools`.
+- **What apply writes:** skill folders (copied, never linked), agent/command/rule files,
+  MCP servers in `~/.claude.json`/`.mcp.json` and Codex `config.toml` (comments kept),
+  hook entries with their scripts, `enabledPlugins`, and marked blocks in `AGENTS.md`.
+  MCP credentials stay `${NAME}` references; Codex gets `env_vars`,
+  `bearer_token_env_var`, or `env_http_headers`. What a harness can't express (a strict
+  tool allowlist in Claude Code, SSE servers in Codex) fails the plan with a reason.
+- **Ownership:** a ledger in kitctl's state dir records every insertion; a repository
+  gets a committable `kit.lock` with hashes only. Anything kitctl didn't write, or that
+  changed since, is a conflict, never overwritten (`--replace` takes over an entry and
+  purge restores it). Writes are staged, journaled, and swapped in atomically;
+  `kitctl recover` finishes or rolls back an interrupted apply.
+- **Trust:** kitctl never marks Codex projects or hooks trusted; it tells you when Codex
+  will ask.
+- **Capture (optional):** `kitctl capture install` adds a SessionStart hook that copies
+  skills and servers you add by hand into `~/kits/inbox` for triage, and a PreToolUse
+  guard that stops agents editing kitctl-managed files (a guardrail, not a security
+  boundary). `kitctl capture remove` takes both out.
+- **`kitctl marketplace build`** generates a Claude Code plugin marketplace in the
+  warehouse (one plugin per loadout, plus adopted plugins).
+
 ## All commands
 
 | Command | What it does |
@@ -67,12 +104,20 @@ kitctl plan                       # a manual cleanup checklist with exact comman
 | `plan [--out DIR]` | Manual cleanup checklist from triage decisions |
 | `adopt <path\|mcp:name> [--to inbox\|primitives\|attic]` | Copy into the warehouse |
 | `validate` | Check warehouse loadouts, primitives, and triage.toml |
+| `desired [--repo PATH]` | Resolved loadouts for user scope or a repository (read-only) |
+| `apply (--global \| --repo PATH) [--dry-run] [--yes] [--replace]` | Install loadouts |
+| `status` | Everything kitctl owns, with drift |
+| `purge (--global \| --repo PATH \| --capture \| --all)` | Remove kitctl's insertions |
+| `eject` | Leave plain native config and drop all ownership |
+| `recover [--rollback]` | Finish or undo an interrupted apply |
+| `capture install\|remove` | kitctl's SessionStart/PreToolUse hooks |
+| `marketplace build` | Claude plugin marketplace in the warehouse |
 | `doctor [--probe]` | Harness versions, paths, trust, hook latency risks |
 | `conformance [--health-checks]` | Compare with `claude`/`codex` list commands (runs them) |
 
-Exit codes: 0 success (informational findings allowed), 1 completed with error findings,
-2 invalid arguments or environment. Common flags: `--no-cache`, `--include-worktrees`,
-`--no-descriptions` (names-only exports).
+Exit codes: 0 success (informational findings allowed), 1 completed with error findings
+or conflicts, 2 invalid arguments or environment. Common flags: `--no-cache`,
+`--include-worktrees`, `--no-descriptions` (names-only exports).
 
 ## What kitctl reads, and what it never does
 
@@ -88,8 +133,9 @@ Exit codes: 0 success (informational findings allowed), 1 completed with error f
 - **Usage:** only identities (skill, subagent, slash command, MCP server and tool names),
   timestamps, and working directories. Prompts, outputs, and tool arguments are never
   stored or printed. Repeat runs read only new log lines.
-- **No writes outside its own directories** (and the warehouse for triage/adopt), enforced
-  by a single guarded write path and by tests that fail on any other write.
+- **No writes outside its own directories** (and the warehouse for triage/adopt/
+  reconcile) except through the write engine, and only to the files a reviewed plan
+  names; enforced by one guarded write path and by tests that fail on any other write.
 - **No harness CLIs executed**, except by `conformance` and `doctor --probe`, which say so.
 - **Links** (symlinks, Windows junctions) are recorded with their target and followed only
   into scanned repositories, harness config dirs, or the warehouse.

@@ -1,7 +1,8 @@
 # kitctl design proposal
 
-Draft for review, 2026-10-11. Only read-only discovery is implemented in 0.0.1.
-Do not interpret this document as permission to apply native configuration.
+Drafted 2026-10-11; updated 2026-10-12 as built for 0.1.0 (see "As built" at the end).
+This document is not permission to apply native configuration on anyone's machine;
+real applies happen only when the user runs them.
 
 ## Sources of truth
 
@@ -66,7 +67,7 @@ and line endings. Missing paths, symlinks, concurrent edits, changed ownership, 
 malformed config produce actionable conflicts, never silent takeover.
 
 Mutations support --dry-run with no filesystem effects and explicit scope. JSON
-edits preserve unrelated keys; TOML edits (0.2.0) use tomlkit to preserve comments. Keep
+edits preserve unrelated keys; TOML edits use vendored tomlkit to preserve comments. Keep
 unchanged bytes where possible and track only insertions actually made.
 
 ## Compiler adapters
@@ -132,3 +133,51 @@ Separate eject test proves effective native behavior survives with no kitctl run
 or warehouse dependency. Include schema failure, path traversal, Windows paths,
 duplicate markers, corrupted ledger, concurrent writes, and drift conflicts.
 Only then review a real dry-run diff and ask for live apply authorization.
+
+## As built (0.1.0)
+
+Modules: `desired.py` (warehouse + kit.toml resolution), `compile.py` (items to effects
+and capability gaps), `engine.py` (ledger, plan, diff, journaled apply, recovery,
+status, eject), `capture.py` (reconcile, guard, capture hooks), `marketplace.py`.
+
+- **Effects.** Six operations, each with a precise identity: `json-key` (pointer),
+  `json-element` (array path plus a hash of the element), `toml-key` (table path),
+  `block` (named markers in Markdown), `file`, and `tree` (copied directory). Owners
+  are `user` (core loadout), a repository path, or `capture`.
+- **Planning.** For each identity: desired and owned (update only if the on-disk value
+  still hashes to what kitctl wrote), desired and not owned (add if absent, adopt if
+  identical, conflict if different unless `--replace`, which records the preimage and is
+  refused for entries holding literal credentials), owned and not desired (remove,
+  restore the preimage, or release a pre-existing entry). Drifted content is always a
+  conflict. Containers kitctl created are pruned when they become empty; files it
+  created are deleted when they become empty; tomlkit's padding before appended tables
+  is trimmed on removal so purge restores bytes exactly.
+- **Ledger.** `<state dir>/ledger.json` (XDG_STATE_HOME/kitctl, ~/Library/Application
+  Support/kitctl, %LOCALAPPDATA%\kitctl\State). Records hold value hashes, created
+  containers/dirs/files, and preimages only when replaced. `kit.lock` (per repository)
+  holds item ids, targets relative to the repository, identities, and hashes.
+- **Apply.** Lock file, preimage re-check of every file, staged copies beside targets
+  (mode preserved), backups of changed files in the state dir, journal, `os.replace`
+  per file, then ledger. `recover` rolls forward from staged copies or back from
+  backups and refuses when a file changed in between. Dry runs neither write nor
+  recover. Writes to agent config go only through `fs.agent_*`, which accept exactly the
+  files of the plan being applied.
+- **MCP translation.** Server definitions are normalized from Claude or Codex shape.
+  Claude gets `type`/`command`/`args`/`env` or `type`/`url`/`headers` with `${NAME}`
+  references (expanded by Claude Code). Codex gets `env_vars` for `NAME=${NAME}`,
+  `bearer_token_env_var` for `Authorization: Bearer ${NAME}`, `env_http_headers` for
+  `Header: ${NAME}`, literal values otherwise; anything else is a gap. Key names were
+  checked against the Codex 0.153.4 binary's config schema strings.
+- **Tool filters.** Codex: native `enabled_tools`/`disabled_tools`. Claude:
+  `disabled_tools` become `permissions.deny` rules `mcp__<server>__<tool>`;
+  `enabled_tools` is a gap.
+- **Hooks.** A hook primitive's `[hook]` table (event, matcher, script or command,
+  timeout) becomes a matcher group; scripts are copied to `hooks/kitctl/<name>/`
+  (`$CLAUDE_PROJECT_DIR` for Claude project hooks, absolute paths otherwise).
+- **Rules.** Markdown rules become Claude `rules/*.md` files and Codex `AGENTS.md`
+  blocks; Codex `.rules` files go to `$CODEX_HOME/rules/` (user scope only).
+- **Plugins.** `name@marketplace` ids become `enabledPlugins` entries; warehouse plugin
+  primitives are served from `<warehouse>/marketplace` (user scope only) via
+  `extraKnownMarketplaces` with a `directory` source. Codex plugin enablement is a gap.
+- **Not built in 0.1.0:** a `local` scope (repository config kept out of committed
+  files), Codex plugin generation, managed-scope writes.
