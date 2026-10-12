@@ -35,8 +35,8 @@ are tracked in [docs/followups.md](docs/followups.md).
 | 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
 | 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Complete; npm, TestPyPI, and PyPI 0.0.1 verified; all four CI jobs green |
 | 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
-| 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
-| 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
+| 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Done on the 0.1.0 branch; macOS real-environment runs passed (read-only verified, conformance explained); Windows run pending |
+| 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | triage/plan/adopt built; awaiting a real triage run on the user's inventory |
 | 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
 | 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
 | 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |

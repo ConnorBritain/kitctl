@@ -15,8 +15,30 @@ from kitctl.model import Finding
 
 SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-PRIMITIVE_KINDS = {"skills": "skill", "mcp": "mcp", "hooks": "hook", "plugins": "plugin"}
-LOADOUT_LISTS = {"skills": "skill", "mcp": "mcp", "hooks": "hook", "plugins": "plugin"}
+PRIMITIVE_KINDS = {
+    "skills": "skill",
+    "agents": "agent",
+    "commands": "command",
+    "rules": "rules",
+    "mcp": "mcp",
+    "hooks": "hook",
+    "plugins": "plugin",
+}
+LOADOUT_LISTS = dict(PRIMITIVE_KINDS)
+TRIAGE_DECISIONS = {"core", "loadout", "retire", "merge", "keep", "skip"}
+TRIAGE_FIELDS = {
+    "kind": str,
+    "harness": str,
+    "name": str,
+    "decision": str,
+    "loadout": str,
+    "canonical": str,
+    "reason": str,
+    "proposed": str,
+    "source": str,
+    "decided_at": str,
+    "locations": list,
+}
 LOADOUT_FIELDS = {
     "schema_version": int,
     "name": str,
@@ -85,9 +107,9 @@ class _Validator:
         elif value != expected:
             self.error(path, f"name {value!r} does not match location {expected!r}")
 
-    def primitives(self) -> set[tuple[str, str]]:
+    def primitives(self, area: str = "primitives") -> set[tuple[str, str]]:
         known: set[tuple[str, str]] = set()
-        root = self.warehouse / "primitives"
+        root = self.warehouse / area
         if not root.is_dir():
             return known
         for folder, kind in PRIMITIVE_KINDS.items():
@@ -118,8 +140,39 @@ class _Validator:
                         self.error(
                             document, "source.path must be relative without '..'", "path-traversal"
                         )
+                if kind == "mcp" and not (item / "server.json").is_file():
+                    self.error(document, "MCP primitive is missing server.json", "missing-file")
                 known.add((kind, item.name))
         return known
+
+    def triage(self) -> int:
+        path = self.warehouse / "triage.toml"
+        if not path.is_file():
+            return 0
+        data = self.load(path)
+        if data is None:
+            return 0
+        decisions = data.get("decision", [])
+        if not isinstance(decisions, list):
+            self.error(path, "decision must be an array of tables")
+            return 0
+        for index, row in enumerate(decisions, 1):
+            if not isinstance(row, dict):
+                self.error(path, f"decision #{index} is not a table")
+                continue
+            for key in sorted(set(row) - set(TRIAGE_FIELDS)):
+                self.error(path, f"decision #{index}: unknown field {key!r}", "unknown-field")
+            for key in ("kind", "harness", "name", "decision"):
+                if not isinstance(row.get(key), str):
+                    self.error(path, f"decision #{index}: missing {key!r}", "missing-field")
+            if row.get("decision") not in TRIAGE_DECISIONS:
+                self.error(path, f"decision #{index}: unknown decision {row.get('decision')!r}")
+            loadout = row.get("loadout", "")
+            if loadout and not SLUG.match(str(loadout)):
+                self.error(
+                    path, f"decision #{index}: unsafe loadout name {loadout!r}", "unsafe-name"
+                )
+        return len(decisions)
 
     def loadouts(self, primitives: set[tuple[str, str]]) -> None:
         directory = self.warehouse / "loadouts"
@@ -193,7 +246,9 @@ def validate(warehouse: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"Warehouse not found: {warehouse}")
     checker = _Validator(warehouse)
     primitives = checker.primitives()
+    staged = checker.primitives("inbox") | checker.primitives("attic")
     checker.loadouts(primitives)
+    decisions = checker.triage()
     loadouts = (
         len(list((warehouse / "loadouts").glob("*.toml")))
         if (warehouse / "loadouts").is_dir()
@@ -202,6 +257,8 @@ def validate(warehouse: Path) -> dict[str, Any]:
     return {
         "warehouse": str(warehouse),
         "primitives": len(primitives),
+        "staged": len(staged),
+        "decisions": decisions,
         "loadouts": loadouts,
         "findings": [f.to_dict() for f in checker.findings],
     }

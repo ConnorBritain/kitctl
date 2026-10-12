@@ -80,7 +80,16 @@ def main() -> int:
         print(f"$ kitctl inventory   (cold, {elapsed:.0f} ms, exit {result.returncode})\n{shown}")
         print(result.stderr.replace(str(base), "<sandbox>"))
         # Transcripts come from the fixtures (attributed to app-0).
-        for command in (["usage"], ["report", "--format", "html"], ["doctor"]):
+        for command in (
+            ["usage"],
+            ["report", "--format", "html"],
+            ["doctor"],
+            ["triage", "--list"],
+            ["triage", "--accept-proposals"],
+            ["plan"],
+            ["adopt", "mcp:sentry"],
+            ["validate"],
+        ):
             elapsed, result = run([*kitctl, *command], env)
             print(f"$ kitctl {' '.join(command)}   ({elapsed:.0f} ms, exit {result.returncode})")
             print((result.stdout + result.stderr).replace(str(base), "<sandbox>"))

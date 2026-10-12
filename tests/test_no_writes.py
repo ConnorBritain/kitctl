@@ -63,3 +63,28 @@ def test_guard_catches_writes_and_subprocesses(tmp_path: Path) -> None:
         subprocess.run([sys.executable, "-c", "pass"], check=False)
     assert any("bad.txt" in v for v in violations)
     assert any("subprocess" in v or "posix_spawn" in v for v in violations)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["triage", "--accept-proposals"],
+        ["triage", "--list"],
+        ["adopt", "mcp:github", "--harness", "claude", "--scope", "user"],
+    ],
+    ids=lambda c: " ".join(c),
+)
+def test_warehouse_commands_write_only_kitctl_dirs_and_warehouse(
+    harnesses: Path, tmp_path: Path, command: list[str]
+) -> None:
+    warehouse = tmp_path / "home/kits"
+    warehouse.mkdir()
+    paths = resolve()
+    exclude = [paths.kit_config_dir, paths.kit_cache_dir, warehouse]
+    before = snapshot([tmp_path], exclude)
+    with guarded(exclude) as violations:
+        assert main(command) == 0
+        if command[0] == "triage" and command[1] == "--accept-proposals":
+            assert main(["plan"]) == 0
+    assert violations == [], violations
+    assert snapshot([tmp_path], exclude) == before

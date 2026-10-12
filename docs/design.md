@@ -15,8 +15,12 @@ Default warehouse location is ~/kits; the private GitHub repository can remain
 agent-kits. Initial setup asks where repositories live and stores the chosen parent
 directories locally; do not hardcode ~/Code as a product default.
 
-Warehouse layout: primitives/{skills,mcp,hooks,plugins}, loadouts/, inbox/,
-attic/, marketplace/. Nothing is retired by deleting warehouse content.
+Warehouse layout: primitives/{skills,agents,commands,rules,mcp,hooks,plugins}/<name>/,
+loadouts/, inbox/, attic/, marketplace/, and triage.toml. Each adopted primitive holds
+`primitive.toml` (kind, name, description, harnesses, content_hash, and a [source] table
+with origin, adopted_at, original_hash) plus `files/` (copied content) or, for MCP,
+`server.json` with credentials replaced by `${NAME}` references. Nothing is retired by
+deleting warehouse content.
 
 ## Versioned model
 

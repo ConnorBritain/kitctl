@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from kitctl import tomlw
+
 SCHEMA_VERSION = 1
 
 
@@ -77,30 +79,8 @@ def load(path: Path) -> UserConfig | None:
     return parse(path.read_text("utf-8"), str(path))
 
 
-def _toml_string(value: str) -> str:
-    escaped = []
-    for char in value:
-        if char == "\\":
-            escaped.append("\\\\")
-        elif char == '"':
-            escaped.append('\\"')
-        elif ord(char) < 0x20 or ord(char) == 0x7F:
-            escaped.append(f"\\u{ord(char):04X}")
-        else:
-            escaped.append(char)
-    return '"' + "".join(escaped) + '"'
-
-
 def _toml_value(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, str):
-        return _toml_string(value)
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return "[" + ", ".join(_toml_string(item) for item in value) + "]"
-    raise TypeError(f"Unsupported TOML value: {value!r}")
+    return tomlw.value(value)
 
 
 def dumps(config: UserConfig) -> str:

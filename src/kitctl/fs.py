@@ -44,3 +44,20 @@ def write_atomic(path: Path, text: str) -> None:
     staging = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     staging.write_text(text, "utf-8")
     os.replace(staging, path)
+
+
+def copy_file(source: Path, target: Path) -> None:
+    """Copy bytes from ``source`` to ``target`` (inside an allowed root) atomically."""
+    check(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+    with source.open("rb") as reader, staging.open("wb") as writer:
+        for chunk in iter(lambda: reader.read(1 << 20), b""):
+            writer.write(chunk)
+    os.replace(staging, target)
+
+
+def remove(target: Path) -> None:
+    """Delete a file inside an allowed root (used when replacing adopted warehouse copies)."""
+    check(target)
+    target.unlink(missing_ok=True)

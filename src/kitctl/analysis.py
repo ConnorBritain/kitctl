@@ -115,14 +115,20 @@ def _location(entry: Entry) -> dict[str, Any]:
 
 
 def drift(entries: list[Entry]) -> list[dict[str, Any]]:
-    groups: dict[tuple[str, str], dict[str, list[Entry]]] = defaultdict(lambda: defaultdict(list))
+    """Same kind and name, different content. MCP servers are compared within a harness:
+    Claude JSON and Codex TOML definitions of one server never hash alike."""
+    groups: dict[tuple[str, str, str], dict[str, list[Entry]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     for entry in entries:
         if entry["kind"] in COMPARABLE and entry["content_hash"] and not entry["provided_by"]:
-            groups[(entry["kind"], entry["name"])][entry["content_hash"]].append(entry)
+            harness = entry["harness"] if entry["kind"] == "mcp_server" else ""
+            groups[(entry["kind"], entry["name"], harness)][entry["content_hash"]].append(entry)
     return [
         {
             "kind": kind,
             "name": name,
+            "harness": harness or None,
             "cross_harness": len({e["harness"] for members in variants.values() for e in members})
             > 1,
             "variants": [
@@ -130,7 +136,7 @@ def drift(entries: list[Entry]) -> list[dict[str, Any]]:
                 for digest, members in sorted(variants.items())
             ],
         }
-        for (kind, name), variants in sorted(groups.items())
+        for (kind, name, harness), variants in sorted(groups.items())
         if len(variants) > 1
     ]
 

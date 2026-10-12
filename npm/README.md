@@ -22,6 +22,9 @@ kitctl inventory                # user + managed config, plugins, and every disc
 kitctl inventory --root ~/Code/app --json
 kitctl usage                    # skill/agent/command/MCP calls mined from session logs
 kitctl report --format html     # inventory x repo matrix, usage, findings (md|json|html)
+kitctl triage                   # decide core / loadout / retire / merge / keep per item
+kitctl plan                     # turn decisions into a manual cleanup checklist
+kitctl adopt <path|mcp:name>    # copy a primitive into ~/kits with provenance
 kitctl doctor                   # harness versions, paths, trust, hook latency risks
 kitctl conformance              # compare with `claude`/`codex` list commands (runs them)
 kitctl validate                 # warehouse loadouts and primitives (~/kits)
@@ -68,6 +71,26 @@ to scan them). `--no-descriptions` (or `export_descriptions = false`) gives name
 exports. `kitctl doctor` reads harness versions from their install paths and never runs
 them; `doctor --probe` runs `--version`. `kitctl conformance` is the one command that runs
 harness CLIs, to compare their own listings with the inventory.
+
+### Cleanup workflow
+
+1. `kitctl init`, then `kitctl report --format html` to see everything, where it lives,
+   whether you use it, and what is duplicated, drifted, or broken.
+2. `kitctl triage` walks each skill, agent, command, MCP server, plugin, hook, and rule
+   with a proposal and its reason (merge differing copies; core if used across repos;
+   loadout if repo-specific; retire if stale or unused; keep if there's no usage signal).
+   Accept, override, skip, or quit and resume later. Decisions are saved to
+   `~/kits/triage.toml`; `--list` previews proposals without writing.
+3. `kitctl plan` writes a Markdown checklist with exact paths and native commands
+   (`claude mcp remove -s <scope>`, `codex mcp remove`, `claude plugin disable|uninstall`)
+   and archive-then-remove steps for files. You run the steps yourself.
+4. `kitctl adopt` copies a primitive into the warehouse (`inbox/`, `primitives/`, or
+   `attic/`) with its origin and hash; it never moves the original. MCP servers are stored
+   with credentials replaced by `${NAME}` references, and adoption refuses anything that
+   still looks like a secret.
+
+Triage, plan, and adopt write only kitctl's own directories and the warehouse; no 0.1.x
+command changes agent configuration.
 
 Hooks must call an installed `kitctl` (`uv tool install kitctl` or `pipx install kitctl`),
 never `npx kitctl`: the Node → uv → Python chain cannot meet a session-start budget.

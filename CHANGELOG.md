@@ -17,6 +17,15 @@ Fixes from the first real-environment run (macOS, 60 repos, Claude Code 2.1.86, 
 - `kitctl conformance` compares with `claude`/`codex` list commands (it runs them;
   `--health-checks` opts into `claude mcp list`).
 - `scripts/capture_fixtures.py` captures redacted config structure as test fixtures.
+- `kitctl triage` (interactive, resumable; `--list`, `--accept-proposals`) saves decisions
+  to `<warehouse>/triage.toml`; `kitctl plan` turns them into a manual checklist with
+  native commands; `kitctl adopt` copies primitives into the warehouse with provenance and
+  stores MCP servers with credentials replaced by `${NAME}` references.
+- `validate` covers agents, commands, rules, inbox/attic, MCP `server.json`, and
+  `triage.toml`.
+- Conformance labels stale Codex plugin caches and plugin-provided Codex MCP servers as
+  explained; Codex skills/agents/commands report `untracked`; usage outside the inventory
+  is grouped and categorized (built-in, connector, not installed).
 - Warm inventory on large repos: 6.2 s to about 1 s on a 60-repo realistic benchmark
   without reducing coverage (`inventory --timings` shows phases).
 

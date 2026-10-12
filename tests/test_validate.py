@@ -23,6 +23,7 @@ def warehouse(tmp_path: Path) -> Path:
         root / "primitives/mcp/github/primitive.toml",
         'schema_version = 1\nkind = "mcp"\nname = "github"\n',
     )
+    write(root / "primitives/mcp/github/server.json", '{"github": {"command": "gh-mcp"}}')
     write(root / "loadouts/core.toml", 'schema_version = 1\nname = "core"\nskills = ["writer"]\n')
     write(
         root / "loadouts/web.toml",
