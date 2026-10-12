@@ -58,7 +58,8 @@ def mapping(value: object) -> dict[str, Any]:
 
 def _norm(path: str) -> str:
     text = unicodedata.normalize("NFC", path.replace("\\", "/")).rstrip("/")
-    return os.path.normcase(text) if os.name == "nt" else text
+    # os.path.normcase would turn "/" back into "\\" on Windows; fold case only.
+    return text.casefold() if os.name == "nt" else text
 
 
 def attribute(cwd: str, repos: Iterable[Path]) -> str | None:
