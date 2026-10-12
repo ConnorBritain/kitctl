@@ -24,6 +24,11 @@ dist-tag, so `npx kitctl` keeps resolving to the latest stable; stable releases 
    - installs from the public registries on all three OSes and smoke-tests;
    - creates the GitHub release with notes from the CHANGELOG section.
 
+**Dry run.** Pushing a branch commit that touches release mechanics (the workflow,
+version/npm/release scripts, `npm/`, `pyproject.toml`, `src/kitctl/__init__.py`), or a
+manual "Run workflow" dispatch once the workflow is on the default branch, runs verify,
+CI, build, and install-smoke on all three OSes and skips every publish job.
+
 ## One-time setup (account owner)
 
 - **Required reviewers.** In GitHub → Settings → Environments, add yourself as a required

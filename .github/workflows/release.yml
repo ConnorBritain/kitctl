@@ -2,9 +2,23 @@ name: Release
 # Tag-driven release: push a tag like v0.1.0rc1 (PEP 440). Each publish job runs in a
 # GitHub environment (testpypi, pypi, npm); configure required reviewers on those
 # environments so every publish waits for an explicit approval.
+#
+# Dry run: a manual dispatch, or a branch push that changes release mechanics, runs
+# verify, the CI matrix, build, and install-smoke on 3 OSes; every publish job is skipped
+# because publishing requires a v* tag ref.
 on:
   push:
     tags: ["v*"]
+    branches: ["**"]
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/version.py"
+      - "scripts/prepare_npm.py"
+      - "scripts/release_notes.py"
+      - "npm/**"
+      - "pyproject.toml"
+      - "src/kitctl/__init__.py"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -27,7 +41,9 @@ jobs:
         run: |
           uv run --no-project python scripts/version.py --check
           uv run --no-project python scripts/version.py --github-output
-          uv run --no-project python scripts/release_notes.py "${GITHUB_REF#refs/tags/v}" > /dev/null
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF#refs/tags/v}"
+          else version="$(uv run --no-project python scripts/version.py | sed 's/^pep440=\([^ ]*\).*/\1/')"; fi
+          uv run --no-project python scripts/release_notes.py "$version" > /dev/null
 
   test:
     needs: verify
@@ -99,8 +115,19 @@ jobs:
         run: |
           KITCTL_LAUNCHER_NO_UV=1 HOME="$SANDBOX" USERPROFILE="$SANDBOX" kitctl --version
 
+  dry-run-summary:
+    needs: [verify, test, install-smoke]
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Dry run of ${{ needs.verify.outputs.pep440 }} passed: verify, CI, build," \
+            "install-smoke. Nothing was published (publishing needs a v* tag)." \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
   publish-testpypi:
     needs: [verify, test, install-smoke]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
