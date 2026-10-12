@@ -24,6 +24,9 @@ requirements; it is not an independent grant of permission to change live config
   publishers. Version 0.0.1 is published and installation-tested on both registries.
 - No crates.io publication requested.
 
+Items that need checking from a machine with full network access and the Codex CLI
+are tracked in [docs/followups.md](docs/followups.md).
+
 ## Delivery sequence
 
 | Phase | Deliverable and acceptance | Status |
