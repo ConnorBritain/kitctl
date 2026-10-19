@@ -147,7 +147,8 @@ _FRONTMATTER = re.compile(r"\A﻿?---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)"
 
 
 def frontmatter(text: str) -> dict[str, str]:
-    """Extract ``name`` and ``description`` from a YAML frontmatter block (stdlib subset)."""
+    """Extract ``name``, ``description``, and ``when_to_use`` from YAML frontmatter
+    (stdlib subset)."""
     match = _FRONTMATTER.match(text)
     if not match:
         return {}
@@ -159,7 +160,7 @@ def frontmatter(text: str) -> dict[str, str]:
         index += 1
         key, sep, value = line.partition(":")
         key = key.strip()
-        if not sep or line[:1].isspace() or key not in {"name", "description"}:
+        if not sep or line[:1].isspace() or key not in {"name", "description", "when_to_use"}:
             continue
         value = value.strip()
         if value in {"|", ">", "|-", ">-", "|+", ">+"} or not value:

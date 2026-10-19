@@ -101,6 +101,61 @@
       "items": {
         "$ref": "#/$defs/row"
       }
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "budget_chars",
+        "budget_basis",
+        "rows"
+      ],
+      "properties": {
+        "budget_chars": {
+          "type": "integer"
+        },
+        "budget_basis": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "repo",
+              "skills",
+              "listing_chars",
+              "over_budget",
+              "mcp"
+            ],
+            "properties": {
+              "repo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "skills": {
+                "type": "integer"
+              },
+              "listing_chars": {
+                "type": "integer"
+              },
+              "over_budget": {
+                "type": "boolean"
+              },
+              "biggest": {
+                "type": "array"
+              },
+              "mcp": {
+                "type": "object"
+              },
+              "mcp_tokens": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from kitctl import analysis
+from kitctl import analysis, context
 from kitctl import config as kit_config
 from kitctl import paths as kit_paths
 from kitctl.inventory import inventory
@@ -49,7 +49,39 @@ def build(
     report["usage"] = usage
     report["analysis"] = result
     report["matrix"] = matrix(report["entries"], per_entry)
+    report["context"] = context.summary(report, context.load_probes(paths))
+    budget = report["context"]["budget_chars"]
+    for row in report["context"]["rows"]:
+        if row["over_budget"]:
+            where = Path(row["repo"]).name if row["repo"] else "user scope"
+            report["findings"].append(
+                {
+                    "severity": "warning",
+                    "code": "skill-listing-over-budget",
+                    "path": row["repo"] or "",
+                    "message": f"{where}: {row['skills']} Claude Code skills need "
+                    f"{row['listing_chars']} listing characters against a budget of about "
+                    f"{budget}; descriptions of the least-used skills are dropped",
+                }
+            )
     return report
+
+
+def context_lines(summary: dict[str, Any]) -> list[str]:
+    lines = []
+    for row in summary["rows"]:
+        where = Path(row["repo"]).name if row["repo"] else "user scope only"
+        flag = " (over budget)" if row["over_budget"] else ""
+        servers = ", ".join(
+            f"{h} {len(row['mcp'][h])} MCP servers"
+            + (f" ~{row['mcp_tokens'][h]} tokens" if row["mcp_tokens"][h] else "")
+            for h in ("claude", "codex")
+        )
+        lines.append(
+            f"{where}: {row['skills']} skills, {row['listing_chars']} listing chars{flag}; "
+            f"{servers}"
+        )
+    return lines
 
 
 def _column(entry: dict[str, Any]) -> str:
@@ -234,6 +266,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"{u['calls']} calls in {len(u['repos']) or 'no'} repo(s), last {u['last_used'][:10]}"
         for u in result["unmatched_usage"][:50]
     ] or ["None."]
+    out += ["", "## Context cost", ""]
+    out += [f"Skill listing budget: {report['context']['budget_basis']}.", ""]
+    for line in context_lines(report["context"]):
+        out.append(f"- {line}")
     out += ["", "## Usage sources", ""]
     for adapter, stats in report["usage"]["adapters"].items():
         out.append(
@@ -375,6 +411,7 @@ def render_html(report: dict[str, Any]) -> str:
             ],
         ),
     ]
+    sections.append(("Context cost", context_lines(report["context"])))
     for title, items in sections:
         parts.append(f"<h2>{_e(title)}</h2>")
         parts.append(

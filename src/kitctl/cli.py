@@ -158,6 +158,15 @@ def main(argv: list[str] | None = None) -> int:
     adopt_cmd.add_argument("--warehouse", type=Path)
     adopt_cmd.set_defaults(handler="warehouse:adopt")
 
+    ctx = commands.add_parser("context", help="Context cost: skill listing and MCP tool sizes.")
+    ctx.add_argument("--root", action="append", type=Path, dest="roots", metavar="PATH")
+    ctx.add_argument(
+        "--probe", action="store_true", help="Start MCP servers to count their tools (opt-in)."
+    )
+    ctx.add_argument("--timeout", type=float, default=15.0, help="Seconds per server.")
+    ctx.add_argument("--json", action="store_true")
+    ctx.set_defaults(handler="read:context")
+
     conform = commands.add_parser(
         "conformance", help="Compare inventory with claude/codex list commands (runs them)."
     )

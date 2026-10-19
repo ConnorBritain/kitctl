@@ -35,6 +35,7 @@ class Item:
     repos_used: list[str] = field(default_factory=list)
     provides: int = 0
     variants: list[dict[str, Any]] = field(default_factory=list)
+    tokens: int = 0  # measured MCP tool-definition cost (kitctl context --probe)
 
     @property
     def key(self) -> Key:
@@ -79,6 +80,12 @@ def collect_items(report: dict[str, Any]) -> list[Item]:
             mine = [variant for variant in mine if variant["locations"]]
             if len(mine) > 1:
                 drift[(group["kind"], group["name"], harness)] = mine
+    tokens: dict[tuple[str, str], int] = {}
+    for row in report.get("context", {}).get("rows", []):
+        for harness, servers in row["mcp"].items():
+            for server in servers:
+                key = (harness, server["name"])
+                tokens[key] = max(tokens.get(key, 0), int(server.get("tokens") or 0))
     items = []
     for (kind, harness, name), entries in grouped.items():
         row = rows.get((kind, harness, name), {})
@@ -94,6 +101,7 @@ def collect_items(report: dict[str, Any]) -> list[Item]:
                 repos_used=row.get("repos_used", []),
                 provides=provides.get(name, 0) if kind == "plugin" else 0,
                 variants=drift.get((kind, name, harness), []),
+                tokens=tokens.get((harness, name), 0) if kind == "mcp_server" else 0,
             )
         )
     order = {kind: index for index, kind in enumerate(TRIAGE_KINDS)}
@@ -101,6 +109,13 @@ def collect_items(report: dict[str, Any]) -> list[Item]:
 
 
 def propose(item: Item) -> Proposal:
+    proposal = _propose(item)
+    if item.tokens:
+        proposal.reason += f"; its tools cost ~{item.tokens} tokens of context per session"
+    return proposal
+
+
+def _propose(item: Item) -> Proposal:
     scopes = {e["scope"] for e in item.entries}
     repos = sorted({e["repo"] for e in item.entries if e["repo"]})
     if len(item.variants) > 1:

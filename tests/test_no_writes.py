@@ -41,6 +41,7 @@ COMMANDS = [
     ["capture", "install", "--dry-run", "--command", "kitctl"],
     ["marketplace", "build", "--dry-run"],
     ["guard"],
+    ["context"],
 ]
 
 

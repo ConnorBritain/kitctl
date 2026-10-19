@@ -230,3 +230,48 @@ def conformance(args: argparse.Namespace) -> int:
             print(f"  {row['check']}: {row['item']} missing from {row['missing_from']}{note}")
         print(f"{len(result['mismatches'])} differences, {result['unexplained']} unexplained.")
     return EXIT_FINDINGS if result["unexplained"] else EXIT_OK
+
+
+def context(args: argparse.Namespace) -> int:
+    from kitctl import context as kit_context
+    from kitctl import paths as kit_paths
+    from kitctl.inventory import inventory
+    from kitctl.report import context_lines
+
+    paths = kit_paths.resolve()
+    try:
+        report = guard(inventory(args.roots))
+    except (OSError, ValueError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.probe:
+        print(
+            "--probe starts each configured MCP server and asks for its tool list (no tool "
+            "is called); servers may log or contact their services. kitctl changes no agent "
+            "configuration.",
+            file=sys.stderr,
+        )
+        probes = kit_context.probe(report["entries"], paths, timeout=args.timeout)
+    else:
+        probes = kit_context.load_probes(paths)
+    summary = kit_context.summary(report, probes)
+    if args.json:
+        print(json.dumps(guard_any(summary), indent=2))
+        return EXIT_OK
+    print(f"Claude Code skill listing budget: {summary['budget_basis']}")
+    for line, row in zip(context_lines(summary), summary["rows"], strict=True):
+        print(line)
+        if row["over_budget"]:
+            names = ", ".join(f"{b['name']} ({b['chars']})" for b in row["biggest"])
+            print(f"  biggest descriptions: {names}")
+        for harness in ("claude", "codex"):
+            for server in row["mcp"][harness]:
+                cost = (
+                    f"{server['tools']} tools, ~{server['tokens']} tokens"
+                    if "tools" in server
+                    else server.get("status", "not probed")
+                )
+                print(f"  {harness:6} {server['name']:24} {cost}")
+    if not probes:
+        print("Run `kitctl context --probe` to measure MCP tool definitions (starts servers).")
+    return EXIT_OK

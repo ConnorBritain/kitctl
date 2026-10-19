@@ -14,6 +14,8 @@ from kitctl.model import Entry, Finding
 from kitctl.safemeta import frontmatter
 from kitctl.scan import Link, is_junction, iter_dir, traverse, walk_tree, within
 
+LISTING_CAP = 1536  # Claude Code truncates description + when_to_use per skill
+
 
 class Collector:
     """Accumulates entries and findings; owns link policy, hashing, and parse errors."""
@@ -217,14 +219,18 @@ class Collector:
         for inner in tree.links:
             self.link(inner, directory, harness, scope, repo)
         manifest_digest = dict(pairs).get("SKILL.md", "")
-        front = self.cache.memo.get(manifest_digest)
+        memo_key = f"fm2:{manifest_digest}"  # fm2: frontmatter now includes when_to_use
+        front = self.cache.memo.get(memo_key)
         if front is None:
             front = frontmatter(self.read_text(directory / "SKILL.md", limit=64 << 10) or "")
             if manifest_digest:
-                self.cache.remember(manifest_digest, front)
+                self.cache.remember(memo_key, front)
+        listed = " ".join(v for v in (front.get("description"), front.get("when_to_use")) if v)
         meta: dict[str, Any] = {
             "frontmatter_name": front.get("name"),
             "description": front.get("description"),
+            # Characters this skill adds to Claude Code's skill listing (capped per entry).
+            "listing_chars": len(directory.name) + min(len(listed), LISTING_CAP),
             "file_count": len(tree.files),
             "total_size": size,
         }
