@@ -108,6 +108,11 @@ wins for generators, and the disagreement is recorded here.
   `claude plugin eval [target]` exist. `eval` runs a plugin's
   `evals/**/case.yaml` suites. The first run in an untrusted plugin directory
   asks for confirmation; `--trust-plugin` answers it for CI.
+- **verified**: `claude plugin validate --strict <dir>` validates the
+  `skills/`, `agents/` and `commands/` components under a directory without a
+  manifest. Pointed at a single skill folder, it fails with "No manifest
+  found". `forge verify` therefore validates `inbox/` as a whole. The kit-forge
+  skill passes.
 - **schema**: `skillOverrides: {"<skill name>": "on" | "name-only" |
   "user-invocable-only" | "off"}`. This is a per-skill switch that the proposal
   assumed did not exist. The CLI's own guidance places it in

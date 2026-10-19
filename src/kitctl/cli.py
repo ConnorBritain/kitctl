@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from kitctl import __version__, engine
+from kitctl import forge as forging
 from kitctl import scout as scouting
 from kitctl.doctor import doctor
 from kitctl.inventory import inventory
@@ -109,7 +110,31 @@ def main(argv: list[str] | None = None) -> int:
     vend.add_argument("--policy", type=Path, help="License policy file (default: warehouse).")
     vend.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
     vend.add_argument("--cache", type=Path, help="Cache root (default: ~/.cache/kitctl).")
+    forge = commands.add_parser("forge", help="Brief, propose and verify a researched loadout.")
+    steps = forge.add_subparsers(dest="step", required=True)
+    brief = steps.add_parser("new", help="Write forge/<slug>/brief.yaml.")
+    brief.add_argument("slug")
+    brief.add_argument("--purpose", required=True)
+    brief.add_argument("--harness", action="append", choices=("claude", "codex"))
+    brief.add_argument("--repo", action="append", dest="repos", help="Target repo; repeatable.")
+    brief.add_argument("--slot", action="append", dest="slots", help="Required slot; repeatable.")
+    brief.add_argument("--exclude", action="append", help="Excluded candidate; repeatable.")
+    for name, text in (
+        ("propose", "Assemble inbox/loadouts/<slug>.yaml and gaps.md."),
+        ("verify", "Run the brief's evals."),
+    ):
+        step = steps.add_parser(name, help=text)
+        step.add_argument("slug")
+    for step in steps.choices.values():
+        step.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
+        step.add_argument("--cache", type=Path, help="Cache root (default: ~/.cache/kitctl).")
+        step.add_argument("--json", action="store_true", help="Print JSON.")
+    steps.choices["verify"].add_argument(
+        "--with-plugin-eval", action="store_true", help="Also run `claude plugin eval` suites."
+    )
     args = parser.parse_args(argv)
+    if args.command == "forge":
+        return _forge(args)
     if args.command == "scout":
         return _scout(args)
     if args.command == "vendor":
@@ -374,3 +399,46 @@ def _vendor(args: argparse.Namespace) -> int:
         "it stays in inbox/ until triage"
     )
     return 0
+
+
+def _forge(args: argparse.Namespace) -> int:
+    warehouse = warehouse_root(args.warehouse)
+    cache = scouting.cache_root(args.cache)
+    try:
+        if args.step == "new":
+            path = forging.new_brief(
+                warehouse,
+                args.slug,
+                args.purpose,
+                harnesses=args.harness,
+                target_repos=args.repos,
+                required_slots=args.slots,
+                exclusions=args.exclude,
+            )
+            print(f"wrote {path}; next: research with the kit-forge skill into candidates.yaml")
+            return 0
+        if args.step == "propose":
+            result = forging.propose(warehouse, args.slug, cache)
+            if args.json:
+                print(json.dumps(result, indent=2))
+            else:
+                for path in result["written"]:
+                    print(f"wrote {path}")
+                for ident, reasons in result["excluded"].items():
+                    print(f"excluded {ident}: {'; '.join(reasons)}")
+                for slot in result["unfilled"]:
+                    print(f"unfilled slot {slot}")
+                for command in result["pending_vendor"]:
+                    print(f"vendor first: {command}")
+            return 0
+        record = forging.verify(warehouse, args.slug, cache, args.with_plugin_eval)
+        if args.json:
+            print(json.dumps(record, indent=2))
+        else:
+            for item in record["results"]:
+                print(f"{item['status']:7}  {item['name']}")
+        return 0 if record["ok"] else 1
+    except (forging.ForgeError, scouting.ScoutError) as error:
+        for problem in getattr(error, "problems", [str(error)]):
+            print(f"kitctl: {problem}", file=sys.stderr)
+        return 1

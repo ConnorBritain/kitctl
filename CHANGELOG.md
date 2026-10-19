@@ -20,6 +20,9 @@
   scripts, telemetry, outbound network, self-fetching skills and aggressive triggers
   with file:line evidence, never executing them. `kitctl vendor` copies one pinned
   path into inbox/ with provenance, hash and license notices. See docs/forge.md.
+- `kitctl forge new|propose|verify`: briefs, cited candidate validation, a deterministic
+  draft loadout in inbox/ with gaps.md, and eval runs. The `kit-forge` research skill
+  ships under examples/warehouse.
 
 ## 0.0.1 — 2026-10-11
 

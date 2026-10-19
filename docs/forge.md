@@ -49,3 +49,86 @@ them, and a human makes the final call.
   - the destination already exists.
 - Vendored primitives stay in `inbox/` until the existing triage gate moves
   them.
+
+## `kitctl forge new <slug> --purpose "…"` (M5)
+
+Writes `forge/<slug>/brief.yaml` in the warehouse. The brief records:
+- `purpose`, `harnesses` and `target_repos`;
+- `constraints`: `licenses.allow/deny`, plus `no_telemetry`,
+  `no_runtime_network` and `no_install_scripts` (the first two are on by
+  default);
+- `required_slots` and `exclusions`;
+- `evals`, each `{name, run: [argv…], cwd, expect, timeout}`.
+
+`--slot`, `--repo`, `--exclude` and `--harness` fill in the lists.
+
+## Research (agent work)
+
+The `kit-forge` skill (`examples/warehouse/primitives/skills/kit-forge/`)
+guides an agent from brief to `forge/<slug>/candidates.yaml`. It carries:
+- the rubric: license, maintenance, mechanism, harness compatibility, overlap,
+  opinion bias, network and telemetry, install scripts, trigger
+  aggressiveness, and pinnability;
+- the search playbook;
+- the cite-everything rule;
+- the brand research as a worked example.
+
+The skill uses only `name` and `description` frontmatter, so it runs in both
+Claude Code and Codex. `claude plugin validate --strict` passes on its
+directory with Claude Code 2.1.303.
+
+`candidates.yaml` is validated on every `propose`:
+- `facts` must equal the scout report for that id. Facts come only from
+  scout.
+- `source.sha` must match the quarantined commit.
+- Every stated judgment (`fills`, `overlaps`, `opinion_bias`, `verdict`,
+  `config`) needs citations: `path:line` that exists in the quarantined clone,
+  `fact:<key>`, or an `https://` page. Uncited, invented or out-of-range
+  claims are rejected.
+
+## `kitctl forge propose <slug>`
+
+Deterministic. It takes the `adopt` and `vendor` verdicts that pass the
+brief's constraints. A license outside the policy or unclear, telemetry not
+mitigated by a configured flag, outbound network, self-fetching, install
+scripts (when forbidden), and exclusions all exclude a candidate, with the
+evidence line in the reason.
+
+- Each required slot must have at most one provider; two is an error naming
+  both.
+- **Adopt:** writes a primitive draft into `inbox/<kind>/`.
+- **Vendor:** expects the vendored primitive in `inbox/`, records `provides`
+  on it, and otherwise lists the exact `kitctl vendor … --pin <sha>` command.
+- Writes the draft loadout to **`inbox/loadouts/<slug>.yaml`**, so it stays
+  behind the triage gate, and writes `forge/<slug>/gaps.md`: unfilled slots,
+  excluded candidates with reasons, vendors still to run, and borrow-ideas
+  items as build tasks.
+
+## `kitctl forge verify <slug> [--with-plugin-eval]`
+
+Runs the brief's evals without a shell, expanding globs itself, with a timeout
+and an optional `expect` regex. `cwd` may be:
+- `quarantine:<id>`;
+- `inbox:<kind>/<name>`;
+- a path.
+
+Verify also runs:
+- `claude plugin validate --strict` over vendored inbox skills and each inbox
+  plugin with a `.claude-plugin/plugin.json`;
+- `claude plugin eval` when asked, because it runs a model.
+
+Both are skipped when `claude` isn't installed. Results go to
+`forge/<slug>/verify.json`. Verify executes only the commands the brief
+declares.
+
+For brand-studio, the eval is brand-builder's own suite:
+
+```yaml
+evals:
+  - name: brand-builder suite (slop=signature, considered=clean)
+    run: [node, --test, tests/scan.test.mjs, tests/render.test.mjs]
+    cwd: path/to/brand-builder/plugins/brand-builder
+    expect: "# fail 0"
+```
+
+On 2026-10-19 this passed, 16/16, against brand-builder aa4d814 with Node 22.22.

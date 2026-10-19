@@ -1,0 +1,9 @@
+schema_version: 2
+kind: skill
+name: kit-forge
+description: Research and cite candidates for a Kit forge brief; writes candidates.yaml.
+tags: [kit, forge, research]
+harnesses: [claude, codex]
+source:
+  url: https://github.com/ConnorBritain/kitctl/tree/main/examples/warehouse/primitives/skills/kit-forge
+  license: MIT
