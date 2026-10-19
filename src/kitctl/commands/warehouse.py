@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from kitctl.commands.common import (
+    EXIT_FINDINGS,
     EXIT_OK,
     EXIT_USAGE,
     guard,
@@ -108,12 +109,13 @@ def adopt(args: argparse.Namespace) -> int:
 
     try:
         warehouse = resolve(args.warehouse, allow_writes=True)
-        if args.target.startswith("mcp:"):
+        if args.target.startswith(("mcp:", "hook:")):
             from kitctl.inventory import inventory
 
             report = inventory([Path(args.repo)] if args.repo else None)
-            result = adopt.adopt_mcp(
-                args.target[4:],
+            function = adopt.adopt_mcp if args.target.startswith("mcp:") else adopt.adopt_hook
+            result = function(
+                args.target.partition(":")[2],
                 report["entries"],
                 warehouse,
                 args.to,
@@ -142,3 +144,55 @@ def adopt(args: argparse.Namespace) -> int:
         )
     print("The original was not modified.", file=sys.stderr)
     return EXIT_OK
+
+
+def promote(args: argparse.Namespace) -> int:
+    import difflib
+
+    from kitctl import promote as kit_promote
+    from kitctl import triage
+    from kitctl.inventory import inventory
+    from kitctl.validate import validate
+    from kitctl.warehouse import WarehouseMissing, resolve
+
+    try:
+        warehouse = resolve(args.warehouse, allow_writes=not args.dry_run)
+        decisions = triage.load(warehouse)
+        if not decisions:
+            raise ValueError(
+                f"No triage decisions in {triage.triage_path(warehouse)}; run `kitctl triage` first"
+            )
+        report = guard(inventory(args.roots))
+        result = kit_promote.promote(decisions, report["entries"], warehouse, dry_run=args.dry_run)
+        loadouts = kit_promote.loadout_changes(warehouse, result)
+        kits = kit_promote.kit_changes(result)
+    except (WarehouseMissing, OSError, ValueError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    for line in result.adopted:
+        print(line)
+    for path, (old, new) in [*loadouts.items(), *kits.items()]:
+        diff = difflib.unified_diff(
+            (old or "").splitlines(), new.splitlines(), str(path), str(path), lineterm=""
+        )
+        print("\n".join(diff))
+    for line in result.skipped:
+        print(f"skipped: {line}", file=sys.stderr)
+    for line in result.notes:
+        print(f"note: {line}")
+    if args.dry_run:
+        print("Dry run: nothing was written.")
+        return EXIT_OK
+    kit_promote.write(loadouts, warehouse)
+    if args.write_kit_files:
+        kit_promote.write(kits)
+    elif kits:
+        print("kit.toml not written (pass --write-kit-files); the diffs above show the content.")
+    findings = [f for f in validate(warehouse)["findings"] if f["severity"] == "error"]
+    for finding in findings:
+        print(f"error: {finding['message']} [{finding['path']}]", file=sys.stderr)
+    print(
+        f"{len(result.adopted)} primitives adopted, {len(loadouts)} loadouts updated. "
+        "Next: `kitctl apply --global --dry-run`. No agent configuration changed."
+    )
+    return EXIT_FINDINGS if findings else EXIT_OK

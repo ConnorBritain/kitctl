@@ -129,10 +129,23 @@ def main(argv: list[str] | None = None) -> int:
     plan_cmd.add_argument("--root", action="append", type=Path, dest="roots", metavar="PATH")
     plan_cmd.set_defaults(handler="warehouse:plan")
 
+    promote_cmd = commands.add_parser(
+        "promote", help="Adopt triaged core/loadout items and write loadouts in the warehouse."
+    )
+    promote_cmd.add_argument("--dry-run", action="store_true", help="Show the changes only.")
+    promote_cmd.add_argument(
+        "--write-kit-files", action="store_true", help="Also write kit.toml into repositories."
+    )
+    promote_cmd.add_argument("--warehouse", type=Path)
+    promote_cmd.add_argument("--root", action="append", type=Path, dest="roots", metavar="PATH")
+    promote_cmd.set_defaults(handler="warehouse:promote")
+
     adopt_cmd = commands.add_parser(
         "adopt", help="Copy a primitive into the warehouse (never moves the original)."
     )
-    adopt_cmd.add_argument("target", help="Path to a skill/agent/command/rule/hook, or mcp:<name>.")
+    adopt_cmd.add_argument(
+        "target", help="Path to a skill/agent/command/rule, or mcp:<name>, or hook:<name>."
+    )
     adopt_cmd.add_argument("--to", choices=("inbox", "primitives", "attic"), default="inbox")
     adopt_cmd.add_argument(
         "--kind", choices=("skill", "agent", "command", "rules", "hook", "plugin")

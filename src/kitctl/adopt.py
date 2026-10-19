@@ -6,6 +6,7 @@ references; a value that still looks secret aborts the adoption.
 from __future__ import annotations
 
 import json
+import os
 import re
 import tomllib
 from collections.abc import Mapping
@@ -90,6 +91,7 @@ def _metadata(
     content: str,
     description: str | None,
     harnesses: list[str],
+    hook: dict[str, Any] | None = None,
 ) -> str:
     document: dict[str, Any] = {
         "schema_version": 1,
@@ -104,6 +106,8 @@ def _metadata(
             "original_hash": original,
         },
     }
+    if hook:
+        document["hook"] = hook
     return tomlw.dumps(
         {k: v for k, v in document.items() if v is not None},
         header="Adopted by kitctl. The original was not modified.",
@@ -327,3 +331,151 @@ def adopt_mcp(
         "content_hash": content,
         "env_references": references,
     }
+
+
+# -- hooks -------------------------------------------------------------------------------
+
+_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+_INTERPRETERS = {"sh", "bash", "zsh", "python", "python3", "node", "deno", "bun", "pwsh", "ruby"}
+
+
+def _raw_hooks(document: Any) -> list[dict[str, Any]]:
+    """(event, matcher, handler) rows of a settings-style or hooks.json document."""
+    hooks = document.get("hooks") if isinstance(document, Mapping) else None
+    if isinstance(hooks, Mapping) and isinstance(hooks.get("hooks"), Mapping):
+        hooks = hooks["hooks"]
+    rows = []
+    for event, groups in (hooks or {}).items() if isinstance(hooks, Mapping) else []:
+        for group in groups if isinstance(groups, list) else []:
+            if not isinstance(group, Mapping):
+                continue
+            for handler in group.get("hooks", []) if isinstance(group.get("hooks"), list) else []:
+                if isinstance(handler, Mapping):
+                    rows.append(
+                        {"event": str(event), "matcher": group.get("matcher"), "handler": handler}
+                    )
+    return rows
+
+
+def _expand(token: str, repo: str | None) -> Path:
+    home = str(kit_paths.resolve().home)
+    text = re.sub(r"^~(?=/|$)", home, token)
+    text = text.replace("${HOME}", home).replace("$HOME", home)
+    if repo:
+        for name in ("${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR"):
+            text = text.replace(name, repo)
+    return Path(text)
+
+
+def adopt_hook(
+    name: str,
+    entries: list[dict[str, Any]],
+    warehouse: Path,
+    destination: str = "inbox",
+    harness: str | None = None,
+    scope: str | None = None,
+    repo: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Adopt a hook entry (event, matcher, command, and its local script if any)."""
+    import shlex
+
+    from kitctl.compile import credential_problems
+    from kitctl.safemeta import sha256_text
+
+    matches = [
+        e
+        for e in entries
+        if e["kind"] == "hook"
+        and e["name"] == name
+        and not e["provided_by"]
+        and Path(e["path"]).suffix == ".json"
+        and (harness is None or e["harness"] == harness)
+        and (scope is None or e["scope"] == scope)
+        and (repo is None or (e["repo"] and Path(e["repo"]) == Path(repo).expanduser()))
+    ]
+    if not matches:
+        raise AdoptError(f"No hook entry named {name!r} (see `kitctl inventory`)")
+    if len({e["metadata"].get("command_sha256") for e in matches}) > 1:
+        raise AdoptError(f"{name!r} matches different hooks; pass --harness/--scope/--repo")
+    entry = matches[0]
+    document = json.loads(Path(entry["path"]).read_text("utf-8"))
+    wanted = entry["metadata"].get("command_sha256")
+    row = None
+    for candidate in _raw_hooks(document):
+        command = candidate["handler"].get("command")
+        args = candidate["handler"].get("args")
+        full = command if isinstance(command, str) else ""
+        if isinstance(args, list):
+            full = json.dumps([full, *map(str, args)])
+        if candidate["event"] == entry["metadata"].get("event") and sha256_text(full) == wanted:
+            row = candidate
+            break
+    if row is None or not isinstance(row["handler"].get("command"), str):
+        raise AdoptError(f"Could not find {name!r} in {entry['path']} (changed since inventory?)")
+    command = row["handler"]["command"]
+    if row["handler"].get("args") or row["handler"].get("type", "command") != "command":
+        raise AdoptError(f"{name!r} isn't a plain command hook; adopt it by hand")
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError as error:
+        raise AdoptError(f"Can't parse the hook command: {error}") from error
+    problems = credential_problems({"args": tokens})
+    for token in tokens:
+        assignment = _ASSIGNMENT.match(token)
+        if (
+            assignment
+            and "${" not in assignment.group(2)
+            and re.search(r"(token|key|secret|password|auth|credential)", assignment.group(1), re.I)
+        ):
+            problems.append(f"{assignment.group(1)} is set to a literal value")
+    if find(command):
+        problems.append("the command contains what looks like a credential")
+    if problems:
+        raise AdoptError(
+            f"{name!r}: {'; '.join(problems)}. Move secrets into environment variables first"
+        )
+    index = 1 if tokens and Path(tokens[0]).name in _INTERPRETERS and len(tokens) > 1 else 0
+    script_path = _expand(tokens[index], entry["repo"]) if tokens else None
+    files: list[tuple[str, Path]] = []
+    spec: dict[str, Any] = {"event": row["event"]}
+    if row["matcher"] and row["matcher"] != "*":
+        spec["matcher"] = str(row["matcher"])
+    if isinstance(row["handler"].get("timeout"), int):
+        spec["timeout"] = row["handler"]["timeout"]
+    if script_path is not None and script_path.is_file() and not script_path.is_symlink():
+        files = [(script_path.name, script_path)]
+        spec["script"] = script_path.name
+        rest = tokens[:index] + ["{script}"] + tokens[index + 1 :]
+        spec["command"] = " ".join(t if t == "{script}" else shlex.quote(t) for t in rest)
+        if spec["command"] == "{script}":
+            del spec["command"]
+    else:
+        spec["command"] = command
+    _refuse_secrets(files)
+    primitive_name = slug(Path(tokens[index]).stem if tokens else name)
+    target = _target(warehouse, destination, "hook", primitive_name)
+    content = canonical_hash({"hook": spec, "files": {r: file_digest(p) for r, p in files}})
+    existing = _existing_hash(target)
+    if existing == content:
+        return {"status": "already adopted", "target": str(target), "content_hash": content}
+    if existing is not None and not force:
+        raise AdoptError(f"{target} already holds a different hook; pass --force to replace it")
+    for relative, path in files:
+        fs.copy_file(path, target / "files" / relative)
+        if os.access(path, os.X_OK):
+            os.chmod(target / "files" / relative, 0o755)
+    fs.write_atomic(
+        target / "primitive.toml",
+        _metadata(
+            "hook",
+            primitive_name,
+            f"{entry['path']}#{name}",
+            entry["content_hash"] or "",
+            content,
+            None,
+            [entry["harness"]],
+            hook=spec,
+        ),
+    )
+    return {"status": "adopted", "target": str(target), "content_hash": content}
