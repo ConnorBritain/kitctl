@@ -37,6 +37,17 @@ The npm package is a thin launcher around the bundled Python wheel from the same
 release. It uses `uvx` with that local wheel; it does not require a PyPI release,
 run install scripts, or ship a `kit` binary. uv manages Python if needed.
 
+Loadouts (read-only; nothing is written):
+
+```sh
+uv run kitctl validate ~/kits
+uv run kitctl resolve brand-studio --harness claude --warehouse ~/kits
+uv run kitctl resolve brand-studio:audit --harness codex --json
+```
+
+`resolve` prints the effective native config a loadout would produce and every
+capability gap. See [the model](docs/model.md).
+
 `inventory` defaults to the current directory. Repeat `--root` to inspect several
 repositories, or explicitly pass your home directory to include user config.
 There is no recursive search through unrelated repositories. Symlinked skills and

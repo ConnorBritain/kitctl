@@ -1,0 +1,393 @@
+{
+  "format": 1,
+  "loadout": "brand-studio",
+  "profile": null,
+  "harness": {
+    "name": "claude",
+    "version": "2.1.303",
+    "facts_observed": "2026-10-19"
+  },
+  "layers": [
+    "brand-studio"
+  ],
+  "primitives": [
+    {
+      "identity": "marketplace:brand-builder",
+      "layer": "brand-studio",
+      "hash": "kit-hash-v1:sha256:dc9ca1038bbf8b3092d2caf9d9931c91e3ec8f9213dfb4b306d3a275d85f8564",
+      "provides": []
+    },
+    {
+      "identity": "mcp:chrome-devtools",
+      "layer": "brand-studio",
+      "hash": "kit-hash-v1:sha256:8bebc39e24457d5e571a1be27e7ec6740f5c890fc06e4af672d188d12bc43ebf",
+      "provides": [
+        "browser.mcp"
+      ]
+    },
+    {
+      "identity": "mcp:leonardo",
+      "layer": "brand-studio",
+      "hash": "kit-hash-v1:sha256:aa8eece80cd5677a44d175374fe96d16b638ecf8ca27477e41feb4a582037f48",
+      "provides": [
+        "palette.contrast"
+      ]
+    },
+    {
+      "identity": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "hash": "kit-hash-v1:sha256:f0c09a87f216ac03ab6914547ce15c65dc91513e989dfa55181d8359f3d75819",
+      "provides": [
+        "design.generator",
+        "voice.generator"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "identity": "hook:brand-builder-codex-edit",
+      "reason": "harnesses excludes claude"
+    }
+  ],
+  "slots": {
+    "browser.mcp": {
+      "provider": "mcp:chrome-devtools",
+      "layer": "brand-studio",
+      "status": "filled"
+    },
+    "design.generator": {
+      "provider": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "status": "filled"
+    },
+    "edit.hook": {
+      "provider": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "status": "filled"
+    },
+    "voice.generator": {
+      "provider": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "status": "filled"
+    }
+  },
+  "disables": [
+    {
+      "identity": "skill:anthropic/brand-guidelines",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "skill:anthropic/theme-factory",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "plugin:anthropic/frontend-design",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "plugin:impeccable",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "plugin:taste-skill",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "plugin:hallmark",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "skill:ui-ux-pro-max",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    },
+    {
+      "identity": "skill:googlechrome/modern-web-guidance",
+      "layer": "brand-studio",
+      "status": "external-unverified"
+    }
+  ],
+  "tools": {
+    "requires": [
+      {
+        "identity": "tool:node",
+        "layer": "brand-studio",
+        "check": {
+          "command": [
+            "node",
+            "--version"
+          ],
+          "expect": "^v(1[89]|[2-9][0-9])\\."
+        },
+        "install_hint": "https://nodejs.org/en/download  |  brew install node"
+      },
+      {
+        "identity": "tool:npx",
+        "layer": "brand-studio",
+        "check": {
+          "command": [
+            "npx",
+            "--version"
+          ]
+        },
+        "install_hint": "Ships with Node.js (npm)."
+      },
+      {
+        "identity": "tool:playwright",
+        "layer": "brand-studio",
+        "check": {
+          "command": [
+            "npx",
+            "--no-install",
+            "playwright",
+            "--version"
+          ],
+          "expect": "^Version 1\\."
+        },
+        "install_hint": "npm i -D playwright-core && npx playwright install chromium  (or set CHROMIUM_PATH)"
+      }
+    ],
+    "optional": [
+      {
+        "identity": "tool:vale",
+        "layer": "brand-studio",
+        "check": {
+          "command": [
+            "vale",
+            "--version"
+          ],
+          "expect": "^vale version 3\\."
+        },
+        "install_hint": "brew install vale  |  https://github.com/vale-cli/vale/releases"
+      }
+    ]
+  },
+  "effects": [
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/enabledPlugins/brand-builder@brand-builder",
+      "value": true,
+      "source": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "verified"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/enabledPlugins/frontend-design@claude-plugins-official",
+      "value": false,
+      "source": "plugin:anthropic/frontend-design",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/enabledPlugins/hallmark@hallmark",
+      "value": false,
+      "source": "plugin:hallmark",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/enabledPlugins/impeccable@impeccable",
+      "value": false,
+      "source": "plugin:impeccable",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/enabledPlugins/taste-skill@taste-skill",
+      "value": false,
+      "source": "plugin:taste-skill",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/extraKnownMarketplaces/brand-builder",
+      "value": {
+        "source": {
+          "source": "git",
+          "url": "https://github.com/ConnorBritain/brand-builder.git"
+        }
+      },
+      "source": "marketplace:brand-builder",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "verified"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/skillOverrides/anthropic-skills:brand-guidelines",
+      "value": "off",
+      "source": "skill:anthropic/brand-guidelines",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/skillOverrides/anthropic-skills:theme-factory",
+      "value": "off",
+      "source": "skill:anthropic/theme-factory",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/skillOverrides/modern-web-guidance",
+      "value": "off",
+      "source": "skill:googlechrome/modern-web-guidance",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".claude/settings.json",
+      "format": "json",
+      "key": "/skillOverrides/ui-ux-pro-max",
+      "value": "off",
+      "source": "skill:ui-ux-pro-max",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "schema"
+    },
+    {
+      "target": ".mcp.json",
+      "format": "json",
+      "key": "/mcpServers/chrome-devtools",
+      "value": {
+        "type": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "chrome-devtools-mcp@1.11.0",
+          "--headless",
+          "--isolated",
+          "--no-usage-statistics",
+          "--no-performance-crux"
+        ],
+        "env": {}
+      },
+      "source": "mcp:chrome-devtools",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "verified"
+    },
+    {
+      "target": ".mcp.json",
+      "format": "json",
+      "key": "/mcpServers/leonardo",
+      "value": {
+        "type": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@adobe/leonardo-mcp@0.1.0"
+        ],
+        "env": {}
+      },
+      "source": "mcp:leonardo",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "verified"
+    }
+  ],
+  "instructions": {
+    "target": "CLAUDE.md",
+    "marker": "kit:brand-studio",
+    "layers": [
+      "brand-studio"
+    ],
+    "text": "This repo uses the brand-studio loadout.\n- BRAND.md, DESIGN.md and .brand-builder.json are the only sources of truth for look and voice.\n- brand-builder's skills generate; Chrome DevTools, Leonardo, Vale and the reviewers only check.\n- Don't adopt a look, palette, font or voice suggested by any other skill or website.\n- Copy changes go through copy-voice; no fact that isn't in BRAND.md's proof inventory.\n\nSoft rules (the harness cannot enforce these):\n- Do not use anthropic/brand-guidelines in this repository.\n- Do not use anthropic/theme-factory in this repository.\n- Do not use googlechrome/modern-web-guidance in this repository.\n- Do not use ui-ux-pro-max in this repository.",
+    "owned": true
+  },
+  "setup": [
+    {
+      "run": [
+        "node",
+        "${plugin:brand-builder}/scripts/voice-compile.mjs",
+        "BRAND.md",
+        "--out",
+        ".brand-builder/voice"
+      ],
+      "when": "file-exists:BRAND.md",
+      "outputs": [
+        ".brand-builder/voice/"
+      ],
+      "harness": "any",
+      "layer": "brand-studio",
+      "owned": false
+    }
+  ],
+  "gaps": [
+    {
+      "harness": "claude",
+      "subject": "marketplace:brand-builder",
+      "capability": "marketplace_sha_pin",
+      "severity": "unsupported",
+      "reason": "pinned to commit aa4d814acb353934359f95526961babe07d2e0e6, but marketplace git `ref` is a branch or tag; a commit sha fails (`git clone --branch <sha>`: remote branch not found); the marketplace would track the default branch",
+      "remedy": "tag the pinned commit upstream and set source.tag in the primitive",
+      "fallback": null
+    },
+    {
+      "harness": "claude",
+      "subject": "skill:anthropic/brand-guidelines",
+      "capability": "skill_disable",
+      "severity": "unverified",
+      "reason": "single-skill disable inside plugin:anthropic/skills: skillOverrides[name] = 'off' exists in the 2.1.303 settings schema; its effect on plugin skills in project settings is not exercised",
+      "remedy": "sandbox-probe skillOverrides before the first apply",
+      "fallback": "managed instruction block (soft rule)"
+    },
+    {
+      "harness": "claude",
+      "subject": "skill:anthropic/theme-factory",
+      "capability": "skill_disable",
+      "severity": "unverified",
+      "reason": "single-skill disable inside plugin:anthropic/skills: skillOverrides[name] = 'off' exists in the 2.1.303 settings schema; its effect on plugin skills in project settings is not exercised",
+      "remedy": "sandbox-probe skillOverrides before the first apply",
+      "fallback": "managed instruction block (soft rule)"
+    },
+    {
+      "harness": "claude",
+      "subject": "skill:googlechrome/modern-web-guidance",
+      "capability": "skill_disable",
+      "severity": "unverified",
+      "reason": "single-skill disable: skillOverrides[name] = 'off' exists in the 2.1.303 settings schema; its effect on plugin skills in project settings is not exercised",
+      "remedy": "sandbox-probe skillOverrides before the first apply",
+      "fallback": "managed instruction block (soft rule)"
+    },
+    {
+      "harness": "claude",
+      "subject": "skill:ui-ux-pro-max",
+      "capability": "skill_disable",
+      "severity": "unverified",
+      "reason": "single-skill disable: skillOverrides[name] = 'off' exists in the 2.1.303 settings schema; its effect on plugin skills in project settings is not exercised",
+      "remedy": "sandbox-probe skillOverrides before the first apply",
+      "fallback": "managed instruction block (soft rule)"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,9 @@
+schema_version: 2
+kind: mcp
+name: leonardo
+description: Contrast-targeted palettes from the brand's own key colors; never proposes hues.
+transport: stdio
+command: npx
+pin: { package: "@adobe/leonardo-mcp", version: 0.1.0 }
+provides: [palette.contrast]
+source: { url: https://github.com/adobe/leonardo, license: Apache-2.0 }

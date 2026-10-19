@@ -1,0 +1,14 @@
+schema_version: 2
+kind: plugin
+name: brand-builder
+description: Brand foundation, design direction, site build, slop audit and repair, copy voice.
+marketplace: marketplace:brand-builder
+version: 0.3.1
+skills: [brand-foundation, build-site, copy-voice, design-direction, slop-audit, slop-repair]
+provides: [design.generator, voice.generator]
+hook_provides: [edit.hook]   # PostToolUse hooks/hooks.json, matcher Edit|Write|MultiEdit|apply_patch
+source:
+  git: https://github.com/ConnorBritain/brand-builder.git
+  sha: aa4d814acb353934359f95526961babe07d2e0e6
+  path: plugins/brand-builder
+  license: MIT

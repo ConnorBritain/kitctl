@@ -1,0 +1,6 @@
+schema_version: 2
+kind: mcp
+name: leaky
+command: example-server
+env:
+  API_KEY: not-a-reference-but-a-literal-value

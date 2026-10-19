@@ -1,0 +1,4 @@
+schema_version: 2
+name: traversal
+extends: [../../outside]
+skills: [skill:../../../etc/passwd]

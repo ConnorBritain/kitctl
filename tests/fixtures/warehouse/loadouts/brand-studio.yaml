@@ -1,0 +1,56 @@
+schema_version: 2
+name: brand-studio
+description: >-
+  Build and repair branded websites without AI-design or AI-writing tells.
+  brand-builder is the only generator; every companion checks.
+extends: []
+marketplaces:
+  - marketplace:brand-builder
+plugins:
+  - plugin:brand-builder
+mcp:
+  chrome-devtools: { primitive: mcp:chrome-devtools }
+  leonardo: { primitive: mcp:leonardo }
+hooks:
+  - hook:brand-builder-codex-edit   # fallback only where the harness lacks plugin hooks
+slots:
+  design.generator: plugin:brand-builder
+  voice.generator: plugin:brand-builder
+  browser.mcp: mcp:chrome-devtools
+  edit.hook: plugin:brand-builder
+disable:
+  - skill:anthropic/brand-guidelines
+  - skill:anthropic/theme-factory
+  - plugin:anthropic/frontend-design
+  - plugin:impeccable
+  - plugin:taste-skill
+  - plugin:hallmark
+  - skill:ui-ux-pro-max
+  - skill:googlechrome/modern-web-guidance
+requires: [tool:node, tool:npx, tool:playwright]
+optional: [tool:vale]
+setup:
+  - run: [node, "${plugin:brand-builder}/scripts/voice-compile.mjs", BRAND.md, --out, .brand-builder/voice]
+    when: file-exists:BRAND.md
+    outputs: [.brand-builder/voice/]
+instructions: |
+  This repo uses the brand-studio loadout.
+  - BRAND.md, DESIGN.md and .brand-builder.json are the only sources of truth for look and voice.
+  - brand-builder's skills generate; Chrome DevTools, Leonardo, Vale and the reviewers only check.
+  - Don't adopt a look, palette, font or voice suggested by any other skill or website.
+  - Copy changes go through copy-voice; no fact that isn't in BRAND.md's proof inventory.
+profiles:
+  audit:
+    description: Read-only review of a site.
+    plugins: [plugin:brand-builder]
+    mcp:
+      chrome-devtools: { primitive: mcp:chrome-devtools }
+    hooks: []
+    instructions_append: "Audit only: do not edit site files."
+  voice:
+    description: Copy work only.
+    plugins: [plugin:brand-builder]
+    mcp: {}
+    hooks: []
+    requires: [tool:node]
+    optional: [tool:vale]

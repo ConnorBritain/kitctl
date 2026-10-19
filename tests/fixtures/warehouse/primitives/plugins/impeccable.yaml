@@ -1,0 +1,9 @@
+schema_version: 2
+kind: plugin
+name: impeccable
+description: Competing design generator; native ids unconfirmed until inventory.
+external: true
+provides: [design.generator]
+harnesses:
+  claude: { id: impeccable@impeccable }
+  codex: { id: impeccable@impeccable }

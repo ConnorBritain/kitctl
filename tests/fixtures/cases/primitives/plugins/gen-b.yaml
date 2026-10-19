@@ -1,0 +1,6 @@
+schema_version: 2
+kind: plugin
+name: gen-b
+external: true
+provides: [design.generator]
+harnesses: { claude: { id: gen-b@market }, codex: { id: gen-b@market } }

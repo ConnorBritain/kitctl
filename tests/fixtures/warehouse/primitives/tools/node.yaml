@@ -1,0 +1,6 @@
+schema_version: 2
+kind: tool
+name: node
+description: Node.js 18 or later, for brand-builder scripts and npx-launched MCP servers.
+check: { command: [node, --version], expect: "^v(1[89]|[2-9][0-9])\\." }
+install_hint: "https://nodejs.org/en/download  |  brew install node"

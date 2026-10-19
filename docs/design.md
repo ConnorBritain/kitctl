@@ -20,7 +20,9 @@ attic/, marketplace/. Nothing is retired by deleting warehouse content.
 
 ## Versioned model
 
-All YAML documents use schema_version: 1 and reject unknown fields. Names are
+All YAML documents carry schema_version and reject unknown fields. Version 2
+(2026-10-19) adds the fields documented in docs/model.md; version 1 loadouts are
+still read. Names are
 restricted to safe slug characters; references cannot contain traversal or escape
 their warehouse root. A primitive has kind, name, description, tags, harnesses,
 source provenance, and a SHA-256 content hash. Hashes cover all skill assets and

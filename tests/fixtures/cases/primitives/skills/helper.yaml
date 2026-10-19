@@ -1,0 +1,4 @@
+schema_version: 2
+kind: skill
+name: helper
+description: A Kit-installed skill with assets.

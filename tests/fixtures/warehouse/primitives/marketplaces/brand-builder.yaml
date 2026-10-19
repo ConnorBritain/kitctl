@@ -1,0 +1,11 @@
+schema_version: 2
+kind: marketplace
+name: brand-builder
+description: brand-builder's own marketplace (one plugin).
+source:
+  git: https://github.com/ConnorBritain/brand-builder.git
+  sha: aa4d814acb353934359f95526961babe07d2e0e6   # brand-builder 0.3.1; no release tag yet
+  license: MIT
+harnesses:
+  claude: { manifest: .claude-plugin/marketplace.json }
+  codex: { manifest: .agents/plugins/marketplace.json }
