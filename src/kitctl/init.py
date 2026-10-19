@@ -71,6 +71,7 @@ def run_init(args: argparse.Namespace) -> int:
         repo_parents=[str(Path(p).expanduser()) for p in parents],
         warehouse=str(Path(warehouse).expanduser()),
         discovery_depth=depth,
+        profile=getattr(args, "profile", None) or "",
     )
     for parent in settings.parent_paths():
         if not parent.is_dir():

@@ -55,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     init.add_argument("--warehouse", type=Path, help="Warehouse checkout (default ~/kits).")
     init.add_argument("--depth", type=int, default=None, help="Repo discovery depth (default 3).")
     init.add_argument("--force", action="store_true", help="Overwrite an existing config.")
+    init.add_argument(
+        "--profile", help="Machine profile: also apply loadouts/machine-<profile>.toml."
+    )
     init.set_defaults(handler="warehouse:init")
 
     scan = commands.add_parser("inventory", help="Read-only discovery of agent tooling.")
@@ -220,7 +223,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Take over existing entries that differ (purge restores the originals).",
     )
     apply_cmd.add_argument("--warehouse", type=Path)
+    apply_cmd.add_argument("--profile", help="Machine profile (default: from kitctl config).")
     apply_cmd.set_defaults(handler="write:apply")
+
+    sync_cmd = commands.add_parser(
+        "sync", help="git pull the warehouse, then apply user scope and managed repos."
+    )
+    mutation(sync_cmd)
+    sync_cmd.add_argument("--no-pull", action="store_true", help="Don't run git pull.")
+    sync_cmd.add_argument("--warehouse", type=Path)
+    sync_cmd.add_argument("--profile", help="Machine profile (default: from kitctl config).")
+    sync_cmd.set_defaults(handler="write:sync")
 
     status_cmd = commands.add_parser("status", help="What kitctl owns and whether it drifted.")
     status_cmd.add_argument("--json", action="store_true")

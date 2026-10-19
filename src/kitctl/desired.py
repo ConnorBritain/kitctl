@@ -255,9 +255,29 @@ def load_kit(repo: Path) -> KitFile | None:
     )
 
 
-def desired_user(warehouse: Warehouse) -> Desired:
+def current_profile() -> str:
+    """The machine profile from kitctl's config ("" when unset or unreadable)."""
+    from kitctl import config as kit_config
+    from kitctl import paths as kit_paths
+
+    try:
+        settings = kit_config.load(kit_paths.resolve().kit_config_file)
+    except kit_config.ConfigError:
+        return ""
+    return settings.profile if settings else ""
+
+
+def desired_user(warehouse: Warehouse, profile: str | None = None) -> Desired:
+    """``core`` plus, on a machine with a profile, ``machine-<profile>``."""
+    profile = current_profile() if profile is None else profile
     names = ["core"] if "core" in warehouse.loadouts else []
     notes = [] if names else ["No loadouts/core.toml; nothing is installed at user scope."]
+    if profile:
+        machine = f"machine-{profile}"
+        if machine in warehouse.loadouts:
+            names.append(machine)
+        else:
+            notes.append(f"profile {profile!r}: no loadouts/{machine}.toml; using core only")
     items = warehouse.resolve(names)
     return Desired("user", "user", None, HARNESSES, items, {}, names, notes)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,8 @@ class UserConfig:
     stale_days: int = 60
     include_worktrees: bool = False
     export_descriptions: bool = True
+    # Machine profile: user scope also gets loadouts/machine-<profile>.toml.
+    profile: str = ""
     schema_version: int = SCHEMA_VERSION
 
     def parent_paths(self) -> list[Path]:
@@ -43,6 +46,7 @@ _TYPES: dict[str, type] = {
     "stale_days": int,
     "include_worktrees": bool,
     "export_descriptions": bool,
+    "profile": str,
 }
 
 
@@ -70,6 +74,8 @@ def parse(text: str, source: str = "config") -> UserConfig:
         raise ConfigError(f"{source}: discovery_depth must be between 0 and 10")
     if not 0 <= config.nested_depth <= 12:
         raise ConfigError(f"{source}: nested_depth must be between 0 and 12")
+    if config.profile and not re.match(r"^[a-z0-9][a-z0-9_-]{0,63}$", config.profile):
+        raise ConfigError(f"{source}: profile must be a lowercase slug")
     return config
 
 

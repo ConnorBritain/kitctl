@@ -42,6 +42,7 @@ COMMANDS = [
     ["marketplace", "build", "--dry-run"],
     ["guard"],
     ["context"],
+    ["sync", "--dry-run", "--no-pull"],
 ]
 
 

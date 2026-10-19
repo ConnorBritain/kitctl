@@ -113,8 +113,39 @@ def desired(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def apply(args: argparse.Namespace) -> int:
+def _plan_for(
+    owner: str,
+    repo: Path | None,
+    warehouse: Any,
+    paths: Any,
+    replace: bool,
+    profile: str | None = None,
+) -> tuple[Any, list[str], list[str]]:
+    """(plan or None, notes, gap lines) for one owner."""
     from kitctl import compile as kit_compile
+    from kitctl import desired as kit_desired
+    from kitctl import engine
+
+    wanted = (
+        kit_desired.desired_repo(warehouse, repo)
+        if repo
+        else kit_desired.desired_user(warehouse, profile)
+    )
+    compiled = kit_compile.compile_desired(wanted, paths, warehouse.root)
+    gaps = [f"gap: {g.item} ({g.harness}): {g.message}" for g in compiled.gaps]
+    if gaps:
+        return None, compiled.notes, gaps
+    for line in kit_compile.env_readiness(wanted.items):
+        compiled.notes.append(
+            f"{line}; the server starts without it. Set it in your shell profile or the "
+            "environment your agent launches with"
+        )
+    lock = {"commit": warehouse.commit(), "loadouts": wanted.loadouts} if repo else None
+    plan = engine.plan(owner, compiled.effects, paths, replace=replace, lock=lock)
+    return plan, compiled.notes, []
+
+
+def apply(args: argparse.Namespace) -> int:
     from kitctl import desired as kit_desired
     from kitctl import engine
     from kitctl import paths as kit_paths
@@ -125,27 +156,83 @@ def apply(args: argparse.Namespace) -> int:
         owner, repo = _owner(args)
         _recover_first(args, paths)
         warehouse = kit_desired.Warehouse(resolve(args.warehouse))
-        wanted = (
-            kit_desired.desired_repo(warehouse, repo)
-            if repo
-            else kit_desired.desired_user(warehouse)
-        )
-        compiled = kit_compile.compile_desired(wanted, paths, warehouse.root)
-        if compiled.gaps:
-            for gap in compiled.gaps:
-                print(f"gap: {gap.item} ({gap.harness}): {gap.message}", file=sys.stderr)
+        plan, notes, gaps = _plan_for(owner, repo, warehouse, paths, args.replace, args.profile)
+        if gaps:
+            for line in gaps:
+                print(line, file=sys.stderr)
             print("Nothing was changed: fix the gaps above (or narrow harnesses).", file=sys.stderr)
             return EXIT_FINDINGS
-        for line in kit_compile.env_readiness(wanted.items):
-            compiled.notes.append(
-                f"{line}; the server starts without it. Set it in your shell profile or the "
-                "environment your agent launches with"
-            )
-        lock = {"commit": warehouse.commit(), "loadouts": wanted.loadouts} if repo else None
-        plan = engine.plan(owner, compiled.effects, paths, replace=args.replace, lock=lock)
-        return _run(args, plan, paths, compiled.notes, "Apply")
+        return _run(args, plan, paths, notes, "Apply")
     except (WarehouseMissing, kit_desired.DesiredError, engine.EngineError, OSError) as error:
         return _fail(error)
+
+
+def sync(args: argparse.Namespace) -> int:
+    """Pull the warehouse, then apply user scope and every managed repository."""
+    import subprocess
+
+    from kitctl import config as kit_config
+    from kitctl import desired as kit_desired
+    from kitctl import engine
+    from kitctl import paths as kit_paths
+    from kitctl.inventory import resolve_repos
+    from kitctl.warehouse import WarehouseMissing, resolve
+
+    paths = kit_paths.resolve()
+    try:
+        _recover_first(args, paths)
+        root = resolve(args.warehouse)
+        if not args.no_pull and (root / ".git").exists():
+            print(f"running: git -C {root} pull --ff-only (the only command sync runs)")
+            pulled = subprocess.run(
+                ["git", "-C", str(root), "pull", "--ff-only"],
+                capture_output=True, text=True, check=False,
+            )  # fmt: skip
+            if pulled.returncode != 0:
+                raise engine.EngineError(
+                    "git pull failed; resolve it in the warehouse (nothing was applied): "
+                    + (pulled.stderr.strip().splitlines() or ["unknown error"])[-1]
+                )
+        warehouse = kit_desired.Warehouse(root)
+        ledger = engine.Ledger(paths)
+        managed = {Path(o) for o in ledger.owners() if o not in ("user", "capture")}
+        settings = kit_config.load(paths.kit_config_file)
+        found, _, _ = resolve_repos(None, settings) if settings else ([], "", [])
+        for candidate in found:
+            if (candidate / "kit.toml").is_file() and (candidate / engine.LOCK_FILE).is_file():
+                managed.add(candidate.resolve())
+        owners: list[tuple[str, Path | None]] = [("user", None)]
+        owners += [(str(r), r) for r in sorted(managed) if (r / "kit.toml").is_file()]
+        plans, problems = [], 0
+        for owner, target in owners:
+            print(f"[{owner}]")
+            plan, notes, gaps = _plan_for(owner, target, warehouse, paths, False, args.profile)
+            for line in gaps:
+                print(line, file=sys.stderr)
+            if plan is None:
+                problems += 1
+                continue
+            _show(plan, paths, notes)
+            if plan.conflicts:
+                problems += 1
+            elif not plan.empty:
+                plans.append(plan)
+            else:
+                print("Nothing to change.")
+    except (WarehouseMissing, kit_desired.DesiredError, engine.EngineError, OSError) as error:
+        return _fail(error)
+    changes = sum(len(p.changes) for p in plans)
+    if args.dry_run or not plans:
+        verb = "Dry run" if args.dry_run else "Up to date"
+        print(f"{verb}: {changes} changes across {len(plans)} scopes; nothing was written.")
+        return EXIT_FINDINGS if problems else EXIT_OK
+    if not _confirm(args, f"Apply {changes} changes across {len(plans)} scopes?"):
+        print("Nothing was changed.")
+        return EXIT_OK
+    for plan in plans:
+        engine.apply(plan, paths)
+    print(f"Synced {len(plans)} scopes ({changes} changes); {problems} skipped with problems.")
+    return EXIT_FINDINGS if problems else EXIT_OK
 
 
 def purge(args: argparse.Namespace) -> int:
