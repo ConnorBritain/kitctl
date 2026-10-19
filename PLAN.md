@@ -52,6 +52,7 @@ requirements; it is not an independent grant of permission to change live config
 | 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | M3 (2026-10-19): ledger with loadout/profile attribution, journaled project apply, `plan/apply/use/off/status/eject`, generators for brand-studio's targets; sandbox acceptance green. Writes are refused outside `$KITCTL_SANDBOX`. User-scope generators, setup execution and live apply pending. |
 | 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
 | 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |
+| Forge (new) | scout/vendor, then forge new/propose/verify and the kit-forge skill | M4 (2026-10-19): `scout` (quarantine, facts with file:line evidence, never executes) and `vendor` (pinned path into inbox/ with provenance, hash, notices, license policy). M5 pending. |
 | 9 Removal | Purge restores baseline; eject preserves effective config with zero Kit dependencies | Sandbox proofs (M3): `off` restores the baseline byte for byte; eject leaves native files with no Kit markers, ledger or state. |
 
 Implement and prove the ledger, conflicts, interrupted-write recovery, purge, and

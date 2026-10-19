@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from kitctl import __version__, engine
+from kitctl import scout as scouting
 from kitctl.doctor import doctor
 from kitctl.inventory import inventory
 from kitctl.model import ModelError, warehouse_root
@@ -93,7 +94,26 @@ def main(argv: list[str] | None = None) -> int:
     project(
         commands.add_parser("eject", help="Keep native files; drop Kit's ledger and markers."), True
     )
+    scout = commands.add_parser(
+        "scout", help="Quarantine candidate repos and print facts; never runs their code."
+    )
+    scout.add_argument("sources", nargs="+", metavar="GIT-URL|PATH")
+    scout.add_argument("--cache", type=Path, help="Cache root (default: ~/.cache/kitctl).")
+    scout.add_argument("--json", action="store_true", help="Print facts as JSON.")
+    vend = commands.add_parser("vendor", help="Copy one pinned path from quarantine into inbox/.")
+    vend.add_argument("scouted_id", metavar="HOST/OWNER/REPO@SHA")
+    vend.add_argument("--path", required=True, help="Path inside the scouted repo.")
+    vend.add_argument("--pin", help="Expected commit (prefix allowed).")
+    vend.add_argument("--kind", default="skill", help="Primitive kind (default: skill).")
+    vend.add_argument("--name", help="Primitive name (default: the path's last part).")
+    vend.add_argument("--policy", type=Path, help="License policy file (default: warehouse).")
+    vend.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
+    vend.add_argument("--cache", type=Path, help="Cache root (default: ~/.cache/kitctl).")
     args = parser.parse_args(argv)
+    if args.command == "scout":
+        return _scout(args)
+    if args.command == "vendor":
+        return _vendor(args)
     if args.command in {"plan", "apply", "use", "off", "status", "eject"}:
         return _project_command(args)
     if args.command == "doctor":
@@ -301,3 +321,56 @@ def _project_command(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as error:
         print(f"kitctl: {error}", file=sys.stderr)
         return 2
+
+
+def _scout(args: argparse.Namespace) -> int:
+    cache = scouting.cache_root(args.cache)
+    reports, failed = [], False
+    for source in args.sources:
+        try:
+            reports.append(scouting.scout(source, cache))
+        except (scouting.ScoutError, OSError) as error:
+            print(f"kitctl: {source}: {error}", file=sys.stderr)
+            failed = True
+    if args.json:
+        print(json.dumps(reports, indent=2))
+    else:
+        for report in reports:
+            print(
+                f"{report['id']}  license {report['license']}  last commit {report['last_commit']}"
+            )
+            for manifest in report["manifests"]:
+                print(f"  manifest {manifest['kind']}: {manifest['file']}")
+            for key in (
+                "install_scripts",
+                "telemetry",
+                "outbound_network",
+                "self_fetching",
+                "aggressive_triggers",
+            ):
+                for item in report[key]:
+                    where = f"{item['evidence']['file']}:{item['evidence']['line']}"
+                    print(f"  {key}: {item['detail']}  ({where})")
+    return 1 if failed else 0
+
+
+def _vendor(args: argparse.Namespace) -> int:
+    try:
+        result = scouting.vendor(
+            args.scouted_id,
+            args.path,
+            warehouse_root(args.warehouse),
+            scouting.cache_root(args.cache),
+            kind=args.kind,
+            name=args.name,
+            pin=args.pin,
+            policy_file=args.policy,
+        )
+    except (scouting.ScoutError, OSError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return 1
+    print(
+        f"vendored {result['primitive']} into {result['metadata']} ({result['license']}); "
+        "it stays in inbox/ until triage"
+    )
+    return 0
