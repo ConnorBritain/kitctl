@@ -70,39 +70,45 @@ CLAUDE = Harness(
 
 CODEX = Harness(
     name="codex",
-    version="not installed",
+    version="0.163.0",
     observed="2026-10-19",
     facts={
         "plugin_enable": Fact(
-            True, "documented", '[plugins."<plugin>@<marketplace>"] enabled in .codex/config.toml'
+            True,
+            "verified",
+            '[plugins."<plugin>@<marketplace>"] enabled = true in a trusted project config '
+            "lists the plugin as installed, enabled",
         ),
         "plugin_disable": Fact(True, "documented", '[plugins."<id>"] enabled = false'),
         "plugin_hooks": Fact(
             True,
-            "documented",
-            "plugin hooks/hooks.json run after the user trusts them; [features] hooks is stable "
-            "and on by default; plugin_hooks is a removed flag (openai/codex a309f92)",
+            "verified",
+            "`codex features list`: hooks stable and on, plugin_hooks removed; plugin hooks still "
+            "run only after the user trusts them",
         ),
         "skill_disable": Fact(
             False,
-            "documented",
-            "[[skills.config]] is read only from the user and session layers, not project config",
+            "verified",
+            "[[skills.config]] in a trusted project config is ignored; the same entry in user "
+            "config removes the skill",
         ),
         "marketplace_file": Fact(
-            False,
-            "documented",
-            "registration is documented by command (codex plugin marketplace add); the "
-            "[marketplaces] config keys also carry command-written state",
+            True,
+            "verified",
+            "[marketplaces.<name>] source_type/source/ref in a trusted project config is read, "
+            "but Codex fetches it only on `codex plugin marketplace upgrade <name>`",
         ),
         "marketplace_sha_pin": Fact(
-            False, "documented", "`--ref` exists; whether it accepts a commit sha is unknown"
+            True, "verified", "`--ref <sha>` and ref = <sha> check out exactly that commit"
         ),
-        "mcp_project_file": Fact(True, "documented", "[mcp_servers.<id>] in .codex/config.toml"),
+        "mcp_project_file": Fact(
+            True, "verified", "[mcp_servers.<id>] in a trusted project config is listed and enabled"
+        ),
         "skill_dir": Fact(True, "documented", "repository skills live in .agents/skills/<name>/"),
         "project_trust_required": Fact(
             True,
-            "documented",
-            "project .codex/ layers (config, hooks) load only for trusted projects",
+            "verified",
+            "an untrusted project's .codex/config.toml is ignored (no marketplaces or MCP servers)",
         ),
     },
 )

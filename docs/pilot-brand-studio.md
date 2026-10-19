@@ -38,13 +38,14 @@ harnesses. The `voice-compile` setup step is listed in the plan but not run.
   - Claude: a marketplace `ref` must be a branch or tag. brand-builder has no
     tags, so the marketplace would track the default branch until it is
     tagged.
-  - Codex: registering the marketplace is a manual step,
-    `codex plugin marketplace add ConnorBritain/brand-builder --ref <tag>`.
+  - Codex: Kit writes `[marketplaces.brand-builder]` pinned to the commit. That
+    pin is verified with Codex 0.163.0. You then run
+    `codex plugin marketplace upgrade brand-builder` once to fetch it.
 - **Trust.** Codex loads the project's `.codex/` folder only for trusted
   projects, and runs plugin hooks only after the user reviews them. Kit never
   writes trust.
-- **No Codex identity** for frontend-design, so on Codex it gets only a soft
-  rule.
+- frontend-design does not exist on Codex, so its disable is reported as not
+  applicable rather than as a gap.
 
 ## Findings from the dry run (fix before any real apply)
 

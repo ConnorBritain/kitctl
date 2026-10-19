@@ -192,3 +192,30 @@ owner's machine had 0.153.4 on 2026-10-11.
   `[projects."<path>"] trust_level`; Kit never writes it.
 - AGENTS.md: per directory from the root to the cwd, `AGENTS.override.md`, then
   `AGENTS.md`, then fallbacks, capped by `project_doc_max_bytes` (32 KiB).
+
+### Codex CLI 0.163.0, sandbox probes (2026-10-19)
+
+Installed with `npm install -g @openai/codex@0.163.0` into a sandbox prefix, with a
+throwaway `HOME` and `CODEX_HOME`. Projects were marked trusted only in that
+throwaway config. These facts supersede the "documented" entries above.
+
+- **verified**: `codex features list` shows `hooks` stable and on, and `plugin_hooks`
+  as **removed**. No flag is needed for plugin hooks. They still run only after the
+  user trusts them, but that trust prompt was not exercised.
+- **verified**: an untrusted project's `.codex/config.toml` is ignored entirely. For
+  example, `codex plugin marketplace list` prints "No plugin marketplaces in scope"
+  and `codex mcp list` shows no servers. Once the project is trusted, both appear.
+- **verified**: `codex plugin marketplace add <url> --ref <sha>` writes only
+  `[marketplaces.<name>] source_type = "git", source, ref` and checks out exactly
+  that commit, so **Codex can pin to a commit** (Claude Code cannot).
+- **verified**: that same table written into a trusted project's config is read,
+  but nothing is fetched until `codex plugin marketplace upgrade <name>`. Kit
+  therefore writes the table and reports the upgrade as a one-time manual step.
+- **verified**: `[plugins."brand-builder@brand-builder"] enabled = true` in a
+  trusted project's config, after the marketplace upgrade, lists the plugin as
+  "installed, enabled 0.3.1". No separate `codex plugin add` is needed.
+- **verified**: `[[skills.config]] name = "…" enabled = false` in a trusted
+  project's config is **ignored**: `codex debug prompt-input` still lists the skill.
+  The same entry in user config removes it. Single-skill disables need user scope.
+- **verified**: `[mcp_servers.<id>]` in a trusted project's config is listed and
+  enabled by `codex mcp list`.
