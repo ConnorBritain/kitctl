@@ -268,9 +268,26 @@ def _install_records(document: Any) -> list[tuple[str, Mapping[str, Any]]]:
     return records
 
 
+def _stale_cache(c: Collector, cache: Path, live: set[str]) -> None:
+    """Cached plugin versions no install record points at (left behind by updates)."""
+    if not cache.is_dir():
+        return
+    for market in c.children(cache):
+        for plugin in c.children(market) if market.is_dir() else []:
+            if not plugin.is_dir():
+                continue
+            versions = [v for v in c.children(plugin) if v.is_dir()]
+            stale = [v for v in versions if os.path.normcase(os.path.realpath(v)) not in live]
+            if stale and len(stale) < len(versions):
+                c.finding("info", "stale-plugin-cache", plugin,
+                          f"{plugin.name}@{market.name}: {len(stale)} cached version(s) no "
+                          "longer installed; cleanup candidate")  # fmt: skip
+
+
 def _plugins(c: Collector, paths: Paths) -> None:
     root = paths.claude_plugins_dir
     installed = root / "installed_plugins.json"
+    live: set[str] = set()
     if installed.is_file():
         document = c.read_json(installed)
         records = _install_records(document)
@@ -287,6 +304,8 @@ def _plugins(c: Collector, paths: Paths) -> None:
                 c.finding("warning", "plugin-not-cached", path, f"Installed plugin {pid} missing")
                 continue
             _plugin(c, path, pid, pid.partition("@")[2] or "unknown", "user", repo, record)
+            live.add(os.path.normcase(os.path.realpath(path)))
+    _stale_cache(c, root / "cache", live)
     known = root / "known_marketplaces.json"
     if known.is_file():
         document = c.read_json(known)

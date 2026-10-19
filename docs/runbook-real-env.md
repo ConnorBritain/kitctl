@@ -77,6 +77,14 @@ PART B - write side in a sandbox (real files are only read)
    run `echo '{"cwd":"'$S'/repo"}' | $SB $KIT reconcile --hook claude` and confirm it lands
    in "$S"/home/kits/inbox. Time `$SB $KIT reconcile --hook claude` with nothing new
    (3 runs; note this includes uvx overhead). Then $SB $KIT capture remove --yes.
+11b. Promote and context: $SB $KIT triage --accept-proposals --warehouse "$S"/home/kits
+   (sandbox warehouse), then $SB $KIT promote --dry-run and $SB $KIT promote; report
+   adopted/skipped counts and the loadout diffs (names only). Run $KIT context (real
+   config, read-only) and report per-repo skill listing chars and server counts. Ask me
+   before $KIT context --probe (it starts my MCP servers); if I agree, report tool
+   counts and token estimates per server.
+11c. Sync: $SB $KIT sync --dry-run --no-pull should show "0 changes" after step 10's
+   re-apply (skip if Part B's eject already ran; re-apply first).
 12. Marketplace: $SB $KIT marketplace build; then claude plugin validate
    "$S"/home/kits/marketplace (with HOME="$S"/home). Report the result line.
 13. Delete "$S" when done (it holds copies of your config).

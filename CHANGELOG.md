@@ -22,6 +22,14 @@ Write engine (only these commands change agent configuration, each with a diff f
 - `kitctl capture install|remove`, `kitctl reconcile` (SessionStart: hand-added items to
   the warehouse inbox), `kitctl guard` (PreToolUse: protects kitctl-managed files).
 - `kitctl marketplace build` (Claude plugin marketplace, one plugin per loadout).
+- `kitctl promote` turns triage decisions into primitives and loadout files (comments
+  kept); `kitctl adopt hook:<name>` adopts hook entries with their scripts.
+- `kitctl context` reports the skill listing budget and MCP servers per repository;
+  `--probe` measures each server's tool definitions (tool counts, estimated tokens).
+- Secrets readiness: apply and doctor name unset `${NAME}` references.
+- `kitctl sync` pulls the warehouse and applies everything managed; machine profiles
+  add `loadouts/machine-<profile>.toml`.
+- Apply notes marketplace plugins that aren't installed; stale plugin caches are findings.
 - tomlkit 0.13.3 vendored; kitctl still has no runtime dependencies.
 - Release workflow: dry-run mode for branch pushes and manual runs; npm tarballs are
   installed and published by path.

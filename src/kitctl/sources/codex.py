@@ -149,6 +149,10 @@ def _plugin(c: Collector, root: Path, pid: str, enabled: bool | None, versions: 
     }
     if enabled is not None:
         meta["enabled"] = enabled
+    if versions > 1:
+        c.finding("info", "stale-plugin-cache", root.parent,
+                  f"{pid}: {versions - 1} older cached version(s) beside {root.name}; "
+                  "cleanup candidate")  # fmt: skip
     # The cache can hold plugins Codex no longer lists as installed; only `codex plugin
     # list` knows (see `kitctl conformance`). Config tables are sparse, so stay neutral.
     meta["installed"] = "unknown"

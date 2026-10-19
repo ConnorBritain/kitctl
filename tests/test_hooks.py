@@ -250,3 +250,23 @@ def test_plugin_not_in_marketplace_is_a_gap(env: dict[str, Path], capsys) -> Non
     )
     assert main(["apply", "--global", "--yes"]) == 1
     assert "marketplace build" in capsys.readouterr().err
+
+
+def test_uninstalled_marketplace_plugin_note(env: dict[str, Path], capsys) -> None:
+    assert main(["apply", "--global", "--dry-run"]) == 0
+    assert "claude plugin install formatter@team-tools" in capsys.readouterr().out
+    write(env["home"] / ".claude/plugins/installed_plugins.json",
+          json.dumps({"version": 2, "plugins": {"formatter@team-tools": []}}))  # fmt: skip
+    assert main(["apply", "--global", "--dry-run"]) == 0
+    assert "claude plugin install" not in capsys.readouterr().out
+
+
+def test_stale_plugin_cache_finding(harnesses: Path, tmp_path: Path) -> None:
+    from kitctl.inventory import inventory
+
+    old = tmp_path / "home/.claude/plugins/cache/demo-market/deploy-tools/1.0.0"
+    write(old / ".claude-plugin/plugin.json", '{"name": "deploy-tools"}')
+    findings = inventory([harnesses])["findings"]
+    stale = [f for f in findings if f["code"] == "stale-plugin-cache"]
+    assert any("deploy-tools@demo-market" in f["message"] for f in stale)
+    assert any("code-review@openai-bundled" in f["message"] for f in stale)

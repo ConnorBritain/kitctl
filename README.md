@@ -31,6 +31,8 @@ kitctl init                       # where your repos live (e.g. ~/Code) and ~/ki
 kitctl report --format html       # everything, where it lives, usage, findings
 kitctl triage                     # decide core / loadout / retire / merge / keep
 kitctl plan                       # a manual cleanup checklist with exact commands
+kitctl promote                    # adopt core/loadout picks and write the loadout files
+kitctl apply --global --dry-run   # then install them (see below)
 ```
 
 1. **`init`** asks which directories hold your repositories and where the warehouse is,
@@ -55,6 +57,14 @@ kitctl plan                       # a manual cleanup checklist with exact comman
    moves the original. MCP servers are stored with credentials replaced by `${NAME}`
    references; adoption refuses anything that still looks like a secret.
 
+## How much context your setup costs
+
+`kitctl context` shows, per repository, how much of Claude Code's skill listing budget
+your skills use (descriptions of the least-used skills are dropped when it overflows)
+and which MCP servers each harness loads. `kitctl context --probe` starts each server,
+asks for its tool list (no tool is called), and records tool counts and estimated tokens,
+which the report and triage then use ("142 tools, ~93k tokens, unused for 60 days").
+
 ## Install from the warehouse (apply)
 
 ```sh
@@ -65,6 +75,7 @@ kitctl apply --repo .                # this repository's kit.toml
 kitctl status                        # what kitctl owns, and whether anything drifted
 kitctl purge --repo .                # remove exactly what kitctl added here
 kitctl eject                         # keep everything as plain config; stop managing it
+kitctl sync                          # git pull the warehouse, then apply everything managed
 ```
 
 - **Warehouse:** `primitives/<kind>/<name>/` (from `kitctl adopt`), `loadouts/<name>.toml`
@@ -85,6 +96,11 @@ kitctl eject                         # keep everything as plain config; stop man
   `kitctl recover` finishes or rolls back an interrupted apply.
 - **Trust:** kitctl never marks Codex projects or hooks trusted; it tells you when Codex
   will ask.
+- **Secrets readiness:** apply and `doctor` list every `${NAME}` the servers need that
+  isn't set on this machine (names only).
+- **Several machines:** clone the warehouse on each, run `kitctl sync`. A `profile` in
+  kitctl's config (`kitctl init --profile windows`) adds `loadouts/machine-windows.toml`
+  at user scope.
 - **Capture (optional):** `kitctl capture install` adds a SessionStart hook that copies
   user-level skills and servers you add by hand into `~/kits/inbox` for triage (skipping
   anything that contains credentials), and a PreToolUse
@@ -103,7 +119,9 @@ kitctl eject                         # keep everything as plain config; stop man
 | `report [--format md\|json\|html] [--out DIR]` | Inventory × repo matrix, usage, findings |
 | `triage [--list] [--accept-proposals]` | Decide what to keep; saves to the warehouse |
 | `plan [--out DIR]` | Manual cleanup checklist from triage decisions |
-| `adopt <path\|mcp:name> [--to inbox\|primitives\|attic]` | Copy into the warehouse |
+| `adopt <path\|mcp:name\|hook:name> [--to inbox\|primitives\|attic]` | Copy into the warehouse |
+| `promote [--dry-run] [--write-kit-files]` | Triage decisions to primitives and loadouts |
+| `context [--probe]` | Skill listing budget and MCP tool costs |
 | `validate` | Check warehouse loadouts, primitives, and triage.toml |
 | `desired [--repo PATH]` | Resolved loadouts for user scope or a repository (read-only) |
 | `apply (--global \| --repo PATH) [--dry-run] [--yes] [--replace]` | Install loadouts |
@@ -111,6 +129,7 @@ kitctl eject                         # keep everything as plain config; stop man
 | `purge (--global \| --repo PATH \| --capture \| --all)` | Remove kitctl's insertions |
 | `eject` | Leave plain native config and drop all ownership |
 | `recover [--rollback]` | Finish or undo an interrupted apply |
+| `sync [--dry-run] [--no-pull]` | git pull the warehouse, then apply everything managed |
 | `capture install\|remove` | kitctl's SessionStart/PreToolUse hooks |
 | `marketplace build` | Claude plugin marketplace in the warehouse |
 | `doctor [--probe]` | Harness versions, paths, trust, hook latency risks |

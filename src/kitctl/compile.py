@@ -515,6 +515,20 @@ class _Compiler:
             ("enabledPlugins", plugin_id),
             True,
         )
+        if item.primitive is None and not self._installed(plugin_id):
+            self.notes.append(
+                f"{plugin_id} isn't installed on this machine; enabling it doesn't install it. "
+                f"Run `claude plugin install {plugin_id}` (its marketplace must be added)"
+            )
+
+    def _installed(self, plugin_id: str) -> bool:
+        record = self.paths.claude_plugins_dir / "installed_plugins.json"
+        try:
+            document = json.loads(record.read_text("utf-8"))
+        except (OSError, ValueError):
+            return False
+        plugins = document.get("plugins", document) if isinstance(document, dict) else {}
+        return isinstance(plugins, dict) and plugin_id in plugins
 
     def run(self) -> Compiled:
         for item in self.desired.items:
