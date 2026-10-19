@@ -76,6 +76,28 @@ def _writable(directory: Path) -> bool:
     return os.access(probe, os.W_OK)
 
 
+def _secrets_check(warehouse: Path) -> dict[str, str]:
+    """Environment variables the core loadout (and this repo's kit.toml) need; names only."""
+    from kitctl.compile import env_readiness, env_references
+    from kitctl.desired import DesiredError, Warehouse, desired_repo, desired_user, load_kit
+
+    try:
+        store = Warehouse(warehouse)
+        items = list(desired_user(store).items)
+        cwd = Path.cwd()
+        if load_kit(cwd) is not None:
+            items += desired_repo(store, cwd).items
+    except (DesiredError, OSError) as error:
+        return _check("MCP environment", "info", f"not checked: {error}")
+    missing = env_readiness(items)
+    total = len(env_references(items))
+    if missing:
+        return _check(
+            "MCP environment", "warn", f"{len(missing)} of {total} unset: " + "; ".join(missing)
+        )
+    return _check("MCP environment", "ok", f"all {total} referenced variables are set")
+
+
 def run(with_inventory: bool = True, probe: bool = False) -> dict[str, Any]:
     from kitctl.sources import claude as claude_source
     from kitctl.sources import codex as codex_source
@@ -134,6 +156,7 @@ def run(with_inventory: bool = True, probe: bool = False) -> dict[str, Any]:
                 checks.append(_check("warehouse", "warn", f"{warehouse} not found"))
             elif warehouse:
                 checks.append(_check("warehouse", "ok", str(warehouse)))
+                checks.append(_secrets_check(warehouse))
     except kit_config.ConfigError as error:
         checks.append(_check("kitctl config", "error", str(error)))
     checks.append(

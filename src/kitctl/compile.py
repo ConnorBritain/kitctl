@@ -97,6 +97,39 @@ def source_files(directory: Path) -> dict[str, Path]:
 _SENSITIVE = re.compile(r"(token|key|secret|password|passwd|auth|credential|bearer|cookie)", re.I)
 
 
+def env_references(items: list[Item]) -> dict[str, list[str]]:
+    """Environment variables the desired MCP servers reference: {NAME: [item refs]}."""
+    found: dict[str, list[str]] = {}
+    for item in items:
+        if item.kind != "mcp" or item.primitive is None:
+            continue
+        try:
+            text = json.dumps(server_config(item.primitive))
+        except (OSError, ValueError, DesiredError):
+            continue
+        names = {m.group(1) for m in _REF.finditer(text)}
+        config = json.loads(text)
+        names.update(n for n in config.get("env_vars") or [] if isinstance(n, str))
+        if isinstance(config.get("bearer_token_env_var"), str):
+            names.add(config["bearer_token_env_var"])
+        names.update(v for v in (config.get("env_http_headers") or {}).values())
+        for name in names:
+            found.setdefault(name, []).append(item.ref)
+    return dict(sorted(found.items()))
+
+
+def env_readiness(items: list[Item], env: dict[str, str] | None = None) -> list[str]:
+    """Unset referenced variables, as human-readable lines (names only, never values)."""
+    import os
+
+    env = dict(os.environ) if env is None else env
+    return [
+        f"{name} is not set in this environment (used by {', '.join(refs)})"
+        for name, refs in env_references(items).items()
+        if not env.get(name)
+    ]
+
+
 def credential_problems(config: dict[str, Any]) -> list[str]:
     """Literal credentials in a server definition (kitctl writes only ${NAME} references)."""
     problems = []

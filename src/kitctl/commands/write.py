@@ -136,6 +136,11 @@ def apply(args: argparse.Namespace) -> int:
                 print(f"gap: {gap.item} ({gap.harness}): {gap.message}", file=sys.stderr)
             print("Nothing was changed: fix the gaps above (or narrow harnesses).", file=sys.stderr)
             return EXIT_FINDINGS
+        for line in kit_compile.env_readiness(wanted.items):
+            compiled.notes.append(
+                f"{line}; the server starts without it. Set it in your shell profile or the "
+                "environment your agent launches with"
+            )
         lock = {"commit": warehouse.commit(), "loadouts": wanted.loadouts} if repo else None
         plan = engine.plan(owner, compiled.effects, paths, replace=args.replace, lock=lock)
         return _run(args, plan, paths, compiled.notes, "Apply")
