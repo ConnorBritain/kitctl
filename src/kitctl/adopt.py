@@ -359,7 +359,8 @@ def _raw_hooks(document: Any) -> list[dict[str, Any]]:
 
 def _expand(token: str, repo: str | None) -> Path:
     home = str(kit_paths.resolve().home)
-    text = re.sub(r"^~(?=/|$)", home, token)
+    # A function replacement: a Windows home (C:\Users\...) is not a valid template.
+    text = re.sub(r"^~(?=[/\\]|$)", lambda _: home, token)
     text = text.replace("${HOME}", home).replace("$HOME", home)
     if repo:
         for name in ("${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR"):

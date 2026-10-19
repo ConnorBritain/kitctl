@@ -64,8 +64,9 @@ def test_sync_pulls_and_applies(setup: dict[str, Path], capsys) -> None:
     assert main(["sync", "--dry-run", "--no-pull"]) == 0
 
 
-def test_sync_stops_when_pull_fails(setup: dict[str, Path], capsys) -> None:
-    shutil.rmtree(setup["bare"])
+def test_sync_stops_when_pull_fails(setup: dict[str, Path], tmp_path: Path, capsys) -> None:
+    # Rename rather than delete: git object files are read-only on Windows.
+    setup["bare"].rename(tmp_path / "gone.git")
     assert main(["sync", "--yes"]) == 2
     assert "git pull failed" in capsys.readouterr().err
     assert not (setup["home"] / ".claude/skills").exists()

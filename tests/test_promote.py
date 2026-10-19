@@ -42,7 +42,7 @@ def test_promote_dry_run_writes_nothing(warehouse: Path, harnesses: Path, capsys
     before = snapshot(warehouse, harnesses)
     assert main(["promote", "--dry-run", "--root", str(harnesses)]) == 0
     out = capsys.readouterr().out
-    assert "would adopt" in out and "loadouts/core.toml" in out
+    assert "would adopt" in out and str(Path("loadouts") / "core.toml") in out
     assert snapshot(warehouse, harnesses) == before
 
 
@@ -105,3 +105,11 @@ def test_adopt_hook_with_script(harnesses: Path, tmp_path: Path) -> None:
     assert not [f for f in validate(warehouse)["findings"] if f["severity"] == "error"]
     with pytest.raises(adopt.AdoptError, match="literal"):
         adopt.adopt_hook("SessionStart:*:session-check", entries, warehouse, "primitives")
+
+
+def test_expand_with_windows_home(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(adopt.kit_paths, "resolve", lambda: SimpleNamespace(home="C:\\Users\\x"))
+    assert str(adopt._expand("~/bin/check.sh", None)).startswith("C:\\Users\\x")
+    assert str(adopt._expand("~\\bin\\check.ps1", None)).startswith("C:\\Users\\x")
