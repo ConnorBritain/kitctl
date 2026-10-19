@@ -75,7 +75,12 @@ def test_brand_studio_compiles_the_proposal_table() -> None:
     severities = {(g["subject"], g["severity"]) for g in codex["gaps"]}
     assert ("plugin:brand-builder", "trust-required") in severities
     assert ("marketplace:brand-builder", "manual-step") in severities
-    assert all(e["evidence"] == "documented" for e in codex["effects"])
+    evidence = {e["key"]: e["evidence"] for e in codex["effects"]}
+    assert evidence["marketplaces.brand-builder"] == "verified"  # Codex 0.163.0 sandbox probe
+    assert evidence['plugins."hallmark@hallmark".enabled'] == "documented"
+    disables = {d["identity"]: d["status"] for d in codex["disables"]}
+    assert disables["plugin:anthropic/frontend-design"] == "not-applicable"
+    assert "plugin_hooks" not in {g["capability"] for g in codex["gaps"]}
     assert {s["identity"] for s in codex["skipped"]} == {"hook:brand-builder-codex-edit"}
 
 

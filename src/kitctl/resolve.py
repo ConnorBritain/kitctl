@@ -343,14 +343,32 @@ class Compiler:
             return
         slug = _github_slug(url) or url
         ref = tag or sha
+        if not self.fact("marketplace_file").supported:
+            self.gap(
+                primitive.identity,
+                "marketplace_file",
+                "manual-step",
+                self.fact("marketplace_file").note,
+                remedy=f"codex plugin marketplace add {slug} --ref {ref}",
+            )
+            return
+        self.add(
+            ".codex/config.toml",
+            "toml",
+            f"marketplaces.{name}",
+            {"source_type": "git", "source": url, "ref": ref},
+            primitive.identity,
+            layer,
+            "marketplace_file",
+        )
         self.gap(
             primitive.identity,
-            "marketplace_file",
+            "marketplace_fetch",
             "manual-step",
             self.fact("marketplace_file").note,
-            remedy=f"codex plugin marketplace add {slug} --ref {ref}",
+            remedy=f"after trusting the project: codex plugin marketplace upgrade {name}",
         )
-        if not tag:
+        if not tag and not self.fact("marketplace_sha_pin").supported:
             self.gap(
                 primitive.identity,
                 "marketplace_sha_pin",
@@ -685,6 +703,9 @@ def resolve(
                     "warning",
                 )
             )
+        elif not primitive.supports(harness):
+            # Nothing by this identity exists on this harness: there is nothing to disable.
+            record["status"] = "not-applicable"
         else:
             record["status"] = "external" if observed is not None else "external-unverified"
             external_disables.append((primitive, layer))

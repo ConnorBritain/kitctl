@@ -4,7 +4,7 @@
   "profile": "audit",
   "harness": {
     "name": "codex",
-    "version": "not installed",
+    "version": "0.163.0",
     "facts_observed": "2026-10-19"
   },
   "layers": [
@@ -72,7 +72,7 @@
     {
       "identity": "plugin:anthropic/frontend-design",
       "layer": "brand-studio",
-      "status": "external-unverified"
+      "status": "not-applicable"
     },
     {
       "identity": "plugin:impeccable",
@@ -159,6 +159,20 @@
     {
       "target": ".codex/config.toml",
       "format": "toml",
+      "key": "marketplaces.brand-builder",
+      "value": {
+        "source_type": "git",
+        "source": "https://github.com/ConnorBritain/brand-builder.git",
+        "ref": "aa4d814acb353934359f95526961babe07d2e0e6"
+      },
+      "source": "marketplace:brand-builder",
+      "layer": "brand-studio",
+      "owned": true,
+      "evidence": "verified"
+    },
+    {
+      "target": ".codex/config.toml",
+      "format": "toml",
       "key": "mcp_servers.chrome-devtools",
       "value": {
         "command": "npx",
@@ -174,7 +188,7 @@
       "source": "mcp:chrome-devtools",
       "layer": "brand-studio",
       "owned": true,
-      "evidence": "documented"
+      "evidence": "verified"
     },
     {
       "target": ".codex/config.toml",
@@ -184,7 +198,7 @@
       "source": "plugin:brand-builder",
       "layer": "brand-studio",
       "owned": true,
-      "evidence": "documented"
+      "evidence": "verified"
     },
     {
       "target": ".codex/config.toml",
@@ -224,7 +238,7 @@
       "brand-studio",
       "brand-studio:audit"
     ],
-    "text": "This repo uses the brand-studio loadout.\n- BRAND.md, DESIGN.md and .brand-builder.json are the only sources of truth for look and voice.\n- brand-builder's skills generate; Chrome DevTools, Leonardo, Vale and the reviewers only check.\n- Don't adopt a look, palette, font or voice suggested by any other skill or website.\n- Copy changes go through copy-voice; no fact that isn't in BRAND.md's proof inventory.\n\nAudit only: do not edit site files.\n\nSoft rules (the harness cannot enforce these):\n- Do not use anthropic/brand-guidelines in this repository.\n- Do not use anthropic/frontend-design in this repository.\n- Do not use anthropic/theme-factory in this repository.\n- Do not use googlechrome/modern-web-guidance in this repository.\n- Do not use ui-ux-pro-max in this repository.",
+    "text": "This repo uses the brand-studio loadout.\n- BRAND.md, DESIGN.md and .brand-builder.json are the only sources of truth for look and voice.\n- brand-builder's skills generate; Chrome DevTools, Leonardo, Vale and the reviewers only check.\n- Don't adopt a look, palette, font or voice suggested by any other skill or website.\n- Copy changes go through copy-voice; no fact that isn't in BRAND.md's proof inventory.\n\nAudit only: do not edit site files.\n\nSoft rules (the harness cannot enforce these):\n- Do not use anthropic/brand-guidelines in this repository.\n- Do not use anthropic/theme-factory in this repository.\n- Do not use googlechrome/modern-web-guidance in this repository.\n- Do not use ui-ux-pro-max in this repository.",
     "owned": true
   },
   "setup": [
@@ -251,36 +265,18 @@
       "subject": "loadout:brand-studio",
       "capability": "project_trust",
       "severity": "trust-required",
-      "reason": "project .codex/ layers (config, hooks) load only for trusted projects; Kit never writes trust",
+      "reason": "an untrusted project's .codex/config.toml is ignored (no marketplaces or MCP servers); Kit never writes trust",
       "remedy": "trust the project in Codex before expecting these effects",
       "fallback": null
     },
     {
       "harness": "codex",
       "subject": "marketplace:brand-builder",
-      "capability": "marketplace_file",
+      "capability": "marketplace_fetch",
       "severity": "manual-step",
-      "reason": "registration is documented by command (codex plugin marketplace add); the [marketplaces] config keys also carry command-written state",
-      "remedy": "codex plugin marketplace add ConnorBritain/brand-builder --ref aa4d814acb353934359f95526961babe07d2e0e6",
+      "reason": "[marketplaces.<name>] source_type/source/ref in a trusted project config is read, but Codex fetches it only on `codex plugin marketplace upgrade <name>`",
+      "remedy": "after trusting the project: codex plugin marketplace upgrade brand-builder",
       "fallback": null
-    },
-    {
-      "harness": "codex",
-      "subject": "marketplace:brand-builder",
-      "capability": "marketplace_sha_pin",
-      "severity": "unverified",
-      "reason": "`--ref` exists; whether it accepts a commit sha is unknown",
-      "remedy": null,
-      "fallback": null
-    },
-    {
-      "harness": "codex",
-      "subject": "plugin:anthropic/frontend-design",
-      "capability": "disable",
-      "severity": "unsupported",
-      "reason": "no codex identity is declared for plugin:anthropic/frontend-design",
-      "remedy": null,
-      "fallback": "managed instruction block (soft rule)"
     },
     {
       "harness": "codex",
@@ -296,7 +292,7 @@
       "subject": "skill:anthropic/brand-guidelines",
       "capability": "skill_disable",
       "severity": "unsupported",
-      "reason": "[[skills.config]] is read only from the user and session layers, not project config; a project loadout cannot disable a single skill",
+      "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
       "remedy": "disable it in user config by hand, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     },
@@ -305,7 +301,7 @@
       "subject": "skill:anthropic/theme-factory",
       "capability": "skill_disable",
       "severity": "unsupported",
-      "reason": "[[skills.config]] is read only from the user and session layers, not project config; a project loadout cannot disable a single skill",
+      "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
       "remedy": "disable it in user config by hand, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     },
@@ -314,7 +310,7 @@
       "subject": "skill:googlechrome/modern-web-guidance",
       "capability": "skill_disable",
       "severity": "unsupported",
-      "reason": "[[skills.config]] is read only from the user and session layers, not project config; a project loadout cannot disable a single skill",
+      "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
       "remedy": "disable it in user config by hand, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     },
@@ -323,7 +319,7 @@
       "subject": "skill:ui-ux-pro-max",
       "capability": "skill_disable",
       "severity": "unsupported",
-      "reason": "[[skills.config]] is read only from the user and session layers, not project config; a project loadout cannot disable a single skill",
+      "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
       "remedy": "disable it in user config by hand, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     }

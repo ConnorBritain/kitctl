@@ -4,6 +4,8 @@ Status, 2026-10-19: only a **dry run** has been done, and it wrote nothing.
 Applying the loadout for real is a separate decision for the owner. Until it is
 authorized, kitctl refuses to write anywhere outside `$KITCTL_SANDBOX`.
 
+The steps that need the owner are in [owner-checklist.md](owner-checklist.md).
+
 The pilot is a private product monorepo with a branded marketing app under
 `apps/marketing/`. Its own agent contract forbids deployment, credentials and
 merges to main. A dry run complies with that contract.
@@ -11,15 +13,17 @@ merges to main. A dry run complies with that contract.
 ## What `kitctl use brand-studio` would write
 
 These are project-scoped writes: one `kit.yaml` and one `kit.lock` at the repo
-root, plus the files below. The dry run on 2026-10-19 planned 20 additions and
-reported 15 gaps.
+root, plus the files below. The first dry run on 2026-10-19 planned 20 additions
+and reported 15 gaps. After the Codex facts were verified against 0.163.0, the
+same dry run plans 21 additions (the Codex marketplace entry) and reports 12
+gaps.
 
 | Harness | File | Entries |
 |---|---|---|
 | Claude Code | `.claude/settings.json` (new) | `extraKnownMarketplaces.brand-builder` (git); `enabledPlugins` brand-builder `true`, plus frontend-design, impeccable, taste-skill and hallmark `false`; `skillOverrides` `off` for brand-guidelines, theme-factory, ui-ux-pro-max and modern-web-guidance |
 | Claude Code | `.mcp.json` (new) | `chrome-devtools` (`npx -y chrome-devtools-mcp@1.11.0 --headless --isolated --no-usage-statistics --no-performance-crux`), `leonardo` (`npx -y @adobe/leonardo-mcp@0.1.0`) |
 | Claude Code | `CLAUDE.md` (existing) | appended `<!-- kit:begin brand-studio -->` block |
-| Codex | `.codex/config.toml` (new) | `[mcp_servers.chrome-devtools]`, `[mcp_servers.leonardo]`, `[plugins."brand-builder@brand-builder"] enabled = true`, plus three plugin disables |
+| Codex | `.codex/config.toml` (new) | `[mcp_servers.chrome-devtools]`, `[mcp_servers.leonardo]`, `[marketplaces.brand-builder]`, `[plugins."brand-builder@brand-builder"] enabled = true`, plus three plugin disables |
 | Codex | `AGENTS.md` (existing) | appended managed block |
 
 Not written: the brand-builder edit hook ships with the plugin on both
@@ -38,13 +42,14 @@ harnesses. The `voice-compile` setup step is listed in the plan but not run.
   - Claude: a marketplace `ref` must be a branch or tag. brand-builder has no
     tags, so the marketplace would track the default branch until it is
     tagged.
-  - Codex: registering the marketplace is a manual step,
-    `codex plugin marketplace add ConnorBritain/brand-builder --ref <tag>`.
+  - Codex: Kit writes `[marketplaces.brand-builder]` pinned to the commit. That
+    pin is verified with Codex 0.163.0. You then run
+    `codex plugin marketplace upgrade brand-builder` once to fetch it.
 - **Trust.** Codex loads the project's `.codex/` folder only for trusted
   projects, and runs plugin hooks only after the user reviews them. Kit never
   writes trust.
-- **No Codex identity** for frontend-design, so on Codex it gets only a soft
-  rule.
+- frontend-design does not exist on Codex, so its disable is reported as not
+  applicable rather than as a gap.
 
 ## Findings from the dry run (fix before any real apply)
 
