@@ -1,0 +1,13 @@
+schema_version: 2
+kind: hook
+name: brand-builder-codex-edit
+description: Fallback edit hook for Codex versions without plugin-bundled hooks.
+harnesses: [codex]
+unless_capability: plugin_hooks
+event: PostToolUse
+matcher: "apply_patch|Edit|Write"
+command: [node, "${plugin:brand-builder}/scripts/hook-scan.mjs"]
+timeout: 10
+blocking: false
+trust: requires-user-review
+provides: [edit.hook]

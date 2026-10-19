@@ -1,0 +1,8 @@
+schema_version: 2
+kind: plugin
+name: anthropic/frontend-design
+description: A second design generator.
+external: true
+provides: [design.generator]
+harnesses:
+  claude: { id: frontend-design@claude-plugins-official }

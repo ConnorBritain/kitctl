@@ -23,6 +23,21 @@ requirements; it is not an independent grant of permission to change live config
   publishers. Version 0.0.1 is published and installation-tested on both registries.
 - No crates.io publication requested.
 
+### Decisions recorded 2026-10-19 (loadout proposal §8, owner answers)
+
+- MCP version pins: Kit owns them. A package-launched server (`npx`, `uvx`, …)
+  must carry `pin: {package, version}`; `latest` and unpinned launches fail
+  validation. Pins are inside the content hash, so drift is a warehouse diff.
+- `disable` against an outer layer: allowed at project scope where the harness's
+  precedence supports it, always listed in the plan (so it is not a silent
+  override of core); where the harness cannot express it, the plan carries a
+  capability gap and the managed instruction block carries a soft rule.
+- Forge research reports live in the private warehouse under `research/<slug>/`.
+- Runtime dependency `ruamel.yaml` approved for warehouse parsing (M1) and later
+  comment-preserving edits. `tomlkit` is to be proposed separately at M3.
+- Schema: documents written for the new fields use `schema_version: 2`;
+  version 1 loadouts (extends, skills, mcp, hooks, plugins) are still read.
+
 ## Delivery sequence
 
 | Phase | Deliverable and acceptance | Status |
@@ -30,7 +45,7 @@ requirements; it is not an independent grant of permission to change live config
 | 0 Preflight | Tool/auth checks; missing requirements recorded | Complete |
 | 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
 | 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Complete; npm, TestPyPI, and PyPI 0.0.1 verified; all four CI jobs green |
-| 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | Design drafted; model not implemented |
+| 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | M1 (2026-10-19): schema v2 model, `validate`, read-only `resolve` with capability gaps, brand-studio golden output for both harnesses. **Awaiting owner review; no generators until approved.** |
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
 | 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |

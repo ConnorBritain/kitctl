@@ -1,0 +1,10 @@
+schema_version: 2
+kind: mcp
+name: chrome-devtools
+description: Lighthouse, console, performance traces and emulation for rendered audits.
+transport: stdio
+command: npx
+pin: { package: chrome-devtools-mcp, version: 1.11.0 }
+args: [--headless, --isolated, --no-usage-statistics, --no-performance-crux]
+provides: [browser.mcp]
+source: { url: https://github.com/ChromeDevTools/chrome-devtools-mcp, license: Apache-2.0 }

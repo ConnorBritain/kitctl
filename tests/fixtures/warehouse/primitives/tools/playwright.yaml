@@ -1,0 +1,6 @@
+schema_version: 2
+kind: tool
+name: playwright
+description: playwright-core plus a Chromium for render-audit, interaction-audit and specimens.
+check: { command: [npx, --no-install, playwright, --version], expect: "^Version 1\\." }
+install_hint: "npm i -D playwright-core && npx playwright install chromium  (or set CHROMIUM_PATH)"

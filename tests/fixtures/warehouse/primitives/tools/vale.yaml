@@ -1,0 +1,6 @@
+schema_version: 2
+kind: tool
+name: vale
+description: Prose linter used for brand voice rules in Markdown and docs.
+check: { command: [vale, --version], expect: "^vale version 3\\." }
+install_hint: "brew install vale  |  https://github.com/vale-cli/vale/releases"

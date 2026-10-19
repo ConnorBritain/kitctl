@@ -1,0 +1,8 @@
+schema_version: 1
+name: core
+description: Always-on user-level primitives; populate after inventory and review.
+extends: []
+skills: []
+mcp: {}
+hooks: []
+plugins: []

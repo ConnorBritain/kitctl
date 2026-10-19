@@ -1,0 +1,6 @@
+schema_version: 2
+kind: plugin
+name: anthropic/skills
+description: Anthropic's bundled skills (document and example skills ship together).
+external: true
+harnesses: { claude: {} }

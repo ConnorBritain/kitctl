@@ -1,0 +1,9 @@
+schema_version: 2
+kind: skill
+name: anthropic/theme-factory
+description: Applies a preset theme; competes with DESIGN.md.
+external: true
+plugin: plugin:anthropic/skills
+harnesses:
+  claude: { skill: "anthropic-skills:theme-factory" }
+  codex: {}

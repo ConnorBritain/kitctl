@@ -1,0 +1,8 @@
+schema_version: 2
+kind: skill
+name: googlechrome/modern-web-guidance
+description: Declares itself mandatory for any HTML/CSS; use on demand only.
+external: true
+harnesses:
+  claude: { skill: modern-web-guidance }
+  codex: {}

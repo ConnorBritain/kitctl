@@ -1,0 +1,6 @@
+schema_version: 2
+kind: tool
+name: npx
+description: Launches the pinned MCP servers.
+check: { command: [npx, --version] }
+install_hint: "Ships with Node.js (npm)."

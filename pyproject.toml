@@ -18,7 +18,9 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
 ]
-dependencies = []
+dependencies = [
+    "ruamel-yaml>=0.18.10,<0.19",
+]
 
 [project.scripts]
 kitctl = "kitctl.cli:main"

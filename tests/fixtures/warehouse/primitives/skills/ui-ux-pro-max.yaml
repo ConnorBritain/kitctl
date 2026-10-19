@@ -1,0 +1,9 @@
+schema_version: 2
+kind: skill
+name: ui-ux-pro-max
+description: Category-default design lookup tables.
+external: true
+provides: [design.generator]
+harnesses:
+  claude: { skill: ui-ux-pro-max }
+  codex: {}
