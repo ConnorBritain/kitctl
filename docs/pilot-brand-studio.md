@@ -4,6 +4,8 @@ Status, 2026-10-19: only a **dry run** has been done, and it wrote nothing.
 Applying the loadout for real is a separate decision for the owner. Until it is
 authorized, kitctl refuses to write anywhere outside `$KITCTL_SANDBOX`.
 
+The steps that need the owner are in [owner-checklist.md](owner-checklist.md).
+
 The pilot is a private product monorepo with a branded marketing app under
 `apps/marketing/`. Its own agent contract forbids deployment, credentials and
 merges to main. A dry run complies with that contract.
