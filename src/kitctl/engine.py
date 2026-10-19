@@ -18,6 +18,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -168,13 +169,17 @@ def read_ledger(repo: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         body = data["body"]
-        assert data["schema_version"] == LEDGER_VERSION
-        assert data["checksum"] == _checksum(body)
-        assert all(
+        # Explicit checks, not assert: these must also run under `python -O`.
+        if data["schema_version"] != LEDGER_VERSION:
+            raise ValueError("unsupported schema_version")
+        if data["checksum"] != _checksum(body):
+            raise ValueError("checksum mismatch")
+        if not all(
             isinstance(e, dict) and {"target", "key", "value", "owners"} <= set(e)
             for e in body["entries"]
-        )
-    except (ValueError, KeyError, TypeError, AssertionError) as error:
+        ):
+            raise ValueError("malformed entries")
+    except (ValueError, KeyError, TypeError) as error:
         raise EngineError(
             f"{path} is corrupted or was edited by hand ({type(error).__name__}); Kit will not "
             "guess which entries it owns. Restore it from version control, or remove the "
@@ -518,8 +523,11 @@ def make_plan(repo: Path, warehouse: Path, intent: dict[str, Any]) -> Plan:
             elif stored.exists():
                 baseline = stored.read_bytes()
                 with contextlib.suppress(FormatError, UnicodeDecodeError):
-                    if after is not None and current_doc.parsed(after) == current_doc.parsed(
-                        baseline
+                    if (
+                        after is not None
+                        and current_doc.parsed(after) == current_doc.parsed(baseline)
+                        and _comments(current_doc.fmt, after)
+                        == _comments(current_doc.fmt, baseline)
                     ):
                         after = baseline  # Byte-for-byte baseline when nothing else changed.
         if current_doc.before is None and after is not None:
@@ -587,9 +595,44 @@ def make_plan(repo: Path, warehouse: Path, intent: dict[str, Any]) -> Plan:
 # Apply -------------------------------------------------------------------------------------------
 
 
+def _comments(fmt: str, data: bytes) -> list[str]:
+    """TOML comments are not part of the parsed value; compare them separately."""
+    if fmt != "toml":
+        return []
+    return re.findall(r"#[^\r\n]*", data.decode("utf-8", errors="replace"))
+
+
+def _linked(repo: Path, target: str) -> bool:
+    path = repo / PurePosixPath(target)
+    return path.is_symlink() or any(
+        p.is_symlink() for p in path.parents if p.is_relative_to(repo) and p != repo
+    )
+
+
+def _create_new(path: Path, data: bytes) -> None:
+    """Write a fresh file without following a link planted at its name."""
+    if path.is_symlink():
+        raise ConflictError([f"{path.name} is a symlink; Kit will not write through it"])
+    with contextlib.suppress(FileNotFoundError):
+        path.unlink()  # a leftover from an earlier crash
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_BINARY", 0)
+    )
+    with os.fdopen(os.open(path, flags, 0o644), "wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 @contextlib.contextmanager
 def project_lock(repo: Path) -> Any:
     state = repo / STATE
+    if state.is_symlink():
+        raise EngineError(f"{state} is a symlink; Kit keeps its state only in a real directory")
     state.mkdir(exist_ok=True)
     ignore = state / ".gitignore"
     if not ignore.exists():
@@ -611,10 +654,7 @@ def project_lock(repo: Path) -> Any:
 
 def _write_atomic(path: Path, data: bytes) -> None:
     tmp = path.with_name(path.name + ".kit-tmp")
-    with open(tmp, "wb") as stream:
-        stream.write(data)
-        stream.flush()
-        os.fsync(stream.fileno())
+    _create_new(tmp, data)
     os.replace(tmp, path)
 
 
@@ -688,6 +728,11 @@ def apply_plan(plan: Plan) -> list[str]:
             raise ConflictError(
                 [f"{t} changed after the plan was made; plan again" for t in sorted(moved)]
             )
+        linked = [t for t in changes if _linked(repo, t)]
+        if linked:
+            raise ConflictError(
+                [f"{t} is now behind a symlink; plan again" for t in sorted(linked)]
+            )
         for target, data in plan.preimages.items():
             stored = _preimage_path(repo, target)
             stored.parent.mkdir(parents=True, exist_ok=True)
@@ -700,10 +745,7 @@ def apply_plan(plan: Plan) -> list[str]:
             if after is not None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 staged_path = path.with_name(f"{path.name}.kit-stage-{index}")
-                with open(staged_path, "wb") as stream:
-                    stream.write(after)
-                    stream.flush()
-                    os.fsync(stream.fileno())
+                _create_new(staged_path, after)
                 if path.exists():
                     shutil.copymode(path, staged_path)
                 staged = staged_path.relative_to(repo).as_posix()

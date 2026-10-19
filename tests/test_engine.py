@@ -412,3 +412,54 @@ def test_json_array_entries_are_owned_by_value() -> None:
     assert created == ["/hooks", "/hooks/PostToolUse"]
     formats.json_delete(fresh, "/hooks/PostToolUse/-", {"matcher": "kit"}, created)
     assert fresh == {}
+
+
+def test_comment_only_edit_survives_off(repo: Path) -> None:
+    use(repo, "brand-studio")
+    config = repo / ".codex/config.toml"
+    config.write_text("# why we pin gpt-5\n" + config.read_text())
+    off(repo, "brand-studio")
+    text = config.read_text()
+    assert text.startswith("# why we pin gpt-5\n") and "chrome-devtools" not in text
+    assert "# keep me" in text
+
+
+def test_planted_symlinks_are_never_written_through(repo: Path, tmp_path: Path) -> None:
+    victim = tmp_path / "outside-victim.txt"
+    victim.write_text("untouched")
+    try:
+        (repo / "CLAUDE.md.kit-stage-4").symlink_to(victim)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+    plan = engine.make_plan(
+        repo, WAREHOUSE, engine.with_loadout(engine.read_intent(repo), "brand-studio")
+    )
+    stage_index = sorted(plan.changes).index("CLAUDE.md")
+    (repo / "CLAUDE.md.kit-stage-4").rename(repo / f"CLAUDE.md.kit-stage-{stage_index}")
+    with pytest.raises(engine.ConflictError, match="symlink"):
+        engine.apply_plan(plan)
+    assert victim.read_text() == "untouched"
+    (repo / f"CLAUDE.md.kit-stage-{stage_index}").unlink()
+    shutil.rmtree(repo / ".kit", ignore_errors=True)
+    elsewhere = tmp_path / "elsewhere-state"
+    elsewhere.mkdir()
+    (repo / ".kit").symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(engine.EngineError, match="symlink"):
+        engine.apply_plan(plan)
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_ledger_checks_survive_python_optimize(repo: Path) -> None:
+    import subprocess
+    import sys
+
+    use(repo, "brand-studio")
+    lock = repo / "kit.lock"
+    lock.write_text(lock.read_text().replace('"value": true', '"value": false', 1))
+    code = (
+        "import sys, pathlib; from kitctl import engine\n"
+        "try:\n    engine.read_ledger(pathlib.Path(sys.argv[1]))\n"
+        "except engine.EngineError:\n    sys.exit(0)\nsys.exit(1)\n"
+    )
+    done = subprocess.run([sys.executable, "-O", "-c", code, str(repo)], check=False)
+    assert done.returncode == 0
