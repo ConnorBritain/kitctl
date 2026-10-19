@@ -13,6 +13,9 @@
 - `kitctl doctor [--loadout X] [--harness H] [--root PATH]`: tool checks, MCP
   launchability, unmanaged slot conflicts, stale/ineffective disables, pin drift,
   pending trust and hook heartbeats. Reports only.
+- `kitctl plan`, `apply`, `use`, `off`, `status`, `eject` with an ownership ledger
+  (`kit.lock`), journaled multi-file writes and byte-for-byte removal; sandbox only
+  (`KITCTL_SANDBOX`). Second runtime dependency: tomlkit. See docs/apply.md.
 
 ## 0.0.1 — 2026-10-11
 

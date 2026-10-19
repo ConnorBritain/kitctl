@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from kitctl import __version__
+from kitctl import __version__, engine
 from kitctl.doctor import doctor
 from kitctl.inventory import inventory
 from kitctl.model import ModelError, warehouse_root
@@ -66,7 +66,36 @@ def main(argv: list[str] | None = None) -> int:
     )
     health.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
     health.add_argument("--json", action="store_true", help="Print the full report as JSON.")
+
+    def project(sub: argparse.ArgumentParser, writes: bool) -> None:
+        sub.add_argument("--repo", type=Path, default=None, help="Project root (default: cwd).")
+        sub.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
+        sub.add_argument("--json", action="store_true", help="Print JSON.")
+        if writes:
+            sub.add_argument("--yes", action="store_true", help="Write without asking.")
+            sub.add_argument("--dry-run", action="store_true", help="Show the plan only.")
+
+    project(
+        commands.add_parser("plan", help="Show the diff kit.yaml would produce; reads only."), False
+    )
+    project(
+        commands.add_parser("apply", help="Write the plan (recovering an interrupted one)."), True
+    )
+    use = commands.add_parser("use", help="Activate a loadout or switch its profile, then apply.")
+    use.add_argument("target", metavar="LOADOUT[:PROFILE]")
+    project(use, True)
+    off = commands.add_parser("off", help="Remove one loadout's owned entries, then apply.")
+    off.add_argument("target", metavar="LOADOUT")
+    project(off, True)
+    project(
+        commands.add_parser("status", help="Active loadouts, owned entries, drift, trust."), False
+    )
+    project(
+        commands.add_parser("eject", help="Keep native files; drop Kit's ledger and markers."), True
+    )
     args = parser.parse_args(argv)
+    if args.command in {"plan", "apply", "use", "off", "status", "eject"}:
+        return _project_command(args)
     if args.command == "doctor":
         return _doctor(args)
     if args.command == "validate":
@@ -189,3 +218,86 @@ def _doctor(args: argparse.Namespace) -> int:
                 print(f"         hint: {finding['hint']}")
         print("Doctor reports only; no files changed.")
     return 1 if any(f["severity"] == "error" for f in report["findings"]) else 0
+
+
+def _print_plan(plan: engine.Plan, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({**plan.summary(), "diff": plan.diff()}, indent=2))
+        return
+    diff = plan.diff()
+    print(diff if diff else "No changes.")
+    for op in plan.ops:
+        print(f"{op['action']:12} {op['id']}")
+    for gap in plan.gaps:
+        print(f"gap [{gap['severity']}] {gap['harness']} {gap['subject']}: {gap['reason']}")
+    for step in plan.setup:
+        print(f"setup (not run; outputs are not Kit-owned): {' '.join(step['run'])}")
+    for conflict in plan.conflicts:
+        print(f"conflict: {conflict}", file=sys.stderr)
+
+
+def _project_command(args: argparse.Namespace) -> int:
+    repo = (args.repo or Path.cwd()).resolve()
+    warehouse = warehouse_root(args.warehouse)
+    try:
+        if args.command == "status":
+            report = engine.status(repo, warehouse)
+            if args.json:
+                print(json.dumps(report, indent=2))
+            else:
+                print(f"loadouts: {', '.join(report['loadouts']) or 'none'}")
+                if report["interrupted"]:
+                    print("an apply was interrupted; run `kitctl apply --yes` to recover")
+                for harness, slots in report["slots"].items():
+                    for slot, provider in slots.items():
+                        print(f"{harness} slot {slot}: {provider or 'unfilled'}")
+                for entry in report["entries"]:
+                    owners = ", ".join(
+                        o["loadout"] + (f":{o['profile']}" if o["profile"] else "")
+                        for o in entry["owners"]
+                    )
+                    print(f"{entry['state']:7} {entry['id']}  ({owners})")
+                for item in report["pending_trust"]:
+                    print(f"pending trust: {item}")
+            drift = any(e["state"] != "ok" for e in report["entries"])
+            return 1 if drift or report["interrupted"] else 0
+        if args.command == "eject":
+            if not args.yes or args.dry_run:
+                print(
+                    "eject keeps native files and removes kit.yaml, kit.lock, .kit/ and block "
+                    "markers; re-run with --yes"
+                )
+                return 0 if args.dry_run else 1
+            for target in engine.eject(repo):
+                print(f"ejected {target}")
+            return 0
+        recovered = False
+        if args.command != "plan" and (repo / engine.JOURNAL).exists():
+            if args.dry_run or not args.yes:
+                print("an apply was interrupted; re-run with --yes to recover it first")
+                return 1
+            engine.check_sandbox(repo)
+            recovered = engine.recover(repo)
+        intent = engine.read_intent(repo)
+        if args.command == "use":
+            intent = engine.with_loadout(intent, args.target)
+        elif args.command == "off":
+            intent = engine.without_loadout(intent, args.target)
+        plan = engine.make_plan(repo, warehouse, intent)
+        _print_plan(plan, args.json)
+        if args.command == "plan" or args.dry_run:
+            return 1 if plan.conflicts else 0
+        if not args.yes:
+            print("Nothing written; re-run with --yes to apply.", file=sys.stderr)
+            return 1
+        written = engine.apply_plan(plan)
+        if recovered:
+            print("recovered an interrupted apply")
+        print(f"wrote {len(written)} files" if written else "already up to date")
+        return 0
+    except engine.EngineError as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return 1
+    except (OSError, ValueError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return 2
