@@ -45,8 +45,8 @@ requirements; it is not an independent grant of permission to change live config
 | 0 Preflight | Tool/auth checks; missing requirements recorded | Complete |
 | 1 Names | Registry/API checks plus binary collision research | Complete; requested name retained |
 | 2 Bootstrap/release | Repos, useful 0.0.1, sandbox tests, Linux/Windows CI; npm and PyPI uploads verified | Complete; npm, TestPyPI, and PyPI 0.0.1 verified; all four CI jobs green |
-| 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | M1 (2026-10-19): schema v2 model, `validate`, read-only `resolve` with capability gaps, brand-studio golden output for both harnesses. **Awaiting owner review; no generators until approved.** |
-| 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | Basic read-only discovery in 0.0.1; full inventory pending |
+| 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | M1 (2026-10-19): schema v2 model, `validate`, read-only `resolve` with capability gaps, brand-studio golden output for both harnesses. Model approved and merged 2026-10-19. |
+| 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | M2 (2026-10-19): inventory reads Claude/Codex plugins, marketplaces, MCP (with redacted args), hooks, installed plugin shas and managed blocks over explicit roots; `doctor` reports tools, MCP launchability, unmanaged slot conflicts, stale and ineffective disables, pin drift, pending trust and hook heartbeats. Usage adapters and the drift matrix are still pending. |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
 | 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
 | 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |

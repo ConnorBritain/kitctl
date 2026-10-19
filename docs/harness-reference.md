@@ -128,6 +128,22 @@ wins for generators, and the disagreement is recorded here.
   the plugin "not found in marketplace", which suggests it is added only after an
   interactive trust prompt.
 
+#### Native state that inventory and doctor read (Claude Code 2.1.303, verified)
+
+- User-scope MCP servers are stored in `.claude.json` → `mcpServers`, and
+  local-scope servers in `.claude.json` → `projects["<abs path>"].mcpServers`.
+  The same project entry holds `enabledMcpjsonServers` and
+  `disabledMcpjsonServers`. With `CLAUDE_CONFIG_DIR` set, `.claude.json` lives
+  inside that directory, not in `$HOME`, so inventory reads both
+  `~/.claude.json` and `~/.claude/.claude.json` under the home root.
+- `~/.claude/plugins/installed_plugins.json` (`"version": 2`) records each
+  install: `scope`, `projectPath`, `version`, `installPath` and
+  `gitCommitSha`. Doctor compares `gitCommitSha` with the warehouse pin.
+  `known_marketplaces.json` records registered marketplace sources.
+- Inventory doesn't read the trust store. It skips `[hooks.state]` and
+  `[projects]` in Codex config. Claude stores no hook trust of its own beyond
+  installing the plugin.
+
 ### Codex CLI (not installed in the build container)
 
 Codex is absent here, so every Codex fact is **unverified in this environment**.

@@ -45,6 +45,13 @@ uv run kitctl resolve brand-studio --harness claude --warehouse ~/kits
 uv run kitctl resolve brand-studio:audit --harness codex --json
 ```
 
+`doctor` checks a loadout against what is actually installed in the roots you
+name. It never fixes anything or starts an MCP server:
+
+```sh
+uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
+```
+
 `resolve` prints the effective native config a loadout would produce and every
 capability gap. See [the model](docs/model.md).
 

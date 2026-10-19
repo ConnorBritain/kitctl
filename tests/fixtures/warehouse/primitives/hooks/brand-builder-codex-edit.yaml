@@ -11,3 +11,4 @@ timeout: 10
 blocking: false
 trust: requires-user-review
 provides: [edit.hook]
+heartbeat: { tmpfile: brand-builder-hook.log }   # written by scripts/hook-scan.mjs

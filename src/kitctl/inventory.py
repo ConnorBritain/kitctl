@@ -1,4 +1,4 @@
-"""Read-only, explicitly scoped discovery. Never serialize configuration values."""
+"""Read-only, explicitly scoped discovery. Never serialize secret-bearing values."""
 
 from __future__ import annotations
 
@@ -6,7 +6,9 @@ import hashlib
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
+
+from kitctl.native import read_native
 
 CONFIG_PATHS = (
     ".claude/settings.json",
@@ -32,9 +34,21 @@ class Entry:
     content_hash: str
 
 
+NATIVE_KEYS = (
+    "plugins",
+    "skill_switches",
+    "marketplaces",
+    "mcp_servers",
+    "hooks",
+    "installed_plugins",
+    "managed_blocks",
+)
+
+
 class Report(TypedDict):
     schema_version: int
     entries: list[dict[str, str]]
+    native: dict[str, list[dict[str, Any]]]
     warnings: list[str]
 
 
@@ -81,9 +95,15 @@ def _skill_hash(directory: Path, root: Path) -> str:
 def inventory(roots: list[Path]) -> Report:
     entries: list[Entry] = []
     warnings: list[str] = []
+    native: dict[str, list[dict[str, Any]]] = {key: [] for key in NATIVE_KEYS}
+    home = Path.home().resolve()
     for root in sorted({path.expanduser().resolve() for path in roots}):
         if not root.is_dir():
             raise ValueError(f"Inventory root is not a directory: {root}")
+        state = read_native(root, home)
+        for key in NATIVE_KEYS:
+            native[key].extend(state[key])
+        warnings.extend(state["warnings"])
         for relative in CONFIG_PATHS:
             path = root / relative
             try:
@@ -126,4 +146,9 @@ def inventory(roots: list[Path]) -> Report:
                             warnings.append(f"Cannot read complete skill: {skill}")
             except OSError:
                 warnings.append(f"Cannot read: {directory}")
-    return {"schema_version": 1, "entries": [asdict(e) for e in entries], "warnings": warnings}
+    return {
+        "schema_version": 2,
+        "entries": [asdict(e) for e in entries],
+        "native": native,
+        "warnings": warnings,
+    }

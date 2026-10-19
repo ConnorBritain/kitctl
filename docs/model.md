@@ -52,8 +52,8 @@ Kind-specific fields:
 | Kind | Fields |
 |---|---|
 | mcp | `transport` (stdio\|http), `command`, `url`, `pin {package, version}`, `args`, `env`, `headers` |
-| hook | `event`, `matcher`, `command` (list), `timeout`, `blocking`, `trust` (only `requires-user-review`), `unless_capability` |
-| plugin | `marketplace` (ref), `plugin_name`, `version`, `skills`, `hook_provides` |
+| hook | `event`, `matcher`, `command` (list), `timeout`, `blocking`, `trust` (only `requires-user-review`), `unless_capability`, `heartbeat` |
+| plugin | `marketplace` (ref), `plugin_name`, `version`, `skills`, `hook_provides`, `heartbeat` |
 | skill | `plugin` (the containing plugin, for external skills) |
 | tool | `check {command, expect}`, `install_hint` |
 
@@ -64,6 +64,10 @@ Kind-specific fields:
   `pin`. `latest` is rejected.
 - `hook_provides`: slots a plugin fills only through bundled hooks. They count
   only on harnesses that have plugin hooks.
+- `heartbeat: {tmpfile: NAME}` (added in M2): a log the hook appends to in the
+  temp directory, one line per run: `ISO time<TAB>tool<TAB>cwd…`. `doctor`
+  reads it to say "fired at …" or "never fired" for each project root. It
+  never reads a trust store.
 - `unless_capability`: the primitive is a fallback, active only on harnesses
   that lack the named capability (for example `plugin_hooks`).
 

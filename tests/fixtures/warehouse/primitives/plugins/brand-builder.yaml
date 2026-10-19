@@ -12,3 +12,4 @@ source:
   sha: aa4d814acb353934359f95526961babe07d2e0e6
   path: plugins/brand-builder
   license: MIT
+heartbeat: { tmpfile: brand-builder-hook.log }   # written by scripts/hook-scan.mjs
