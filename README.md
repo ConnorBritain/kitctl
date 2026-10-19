@@ -52,6 +52,15 @@ name. It never fixes anything or starts an MCP server:
 uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
 ```
 
+`use`, `off`, `plan`, `apply`, `status` and `eject` manage a project's native
+config through an ownership ledger. Until live apply is authorized, they write only
+inside `$KITCTL_SANDBOX` (see [apply](docs/apply.md)):
+
+```sh
+export KITCTL_SANDBOX=/tmp/kit-sandbox
+uv run kitctl use brand-studio --repo /tmp/kit-sandbox/site --dry-run
+```
+
 `resolve` prints the effective native config a loadout would produce and every
 capability gap. See [the model](docs/model.md).
 

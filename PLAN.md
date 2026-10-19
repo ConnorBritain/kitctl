@@ -34,7 +34,8 @@ requirements; it is not an independent grant of permission to change live config
   capability gap and the managed instruction block carries a soft rule.
 - Forge research reports live in the private warehouse under `research/<slug>/`.
 - Runtime dependency `ruamel.yaml` approved for warehouse parsing (M1) and later
-  comment-preserving edits. `tomlkit` is to be proposed separately at M3.
+  comment-preserving edits. `tomlkit` approved by the owner 2026-10-19 for M3
+  (comment-preserving `.codex/config.toml` edits); no other runtime dependencies.
 - Schema: documents written for the new fields use `schema_version: 2`;
   version 1 loadouts (extends, skills, mcp, hooks, plugins) are still read.
 
@@ -48,10 +49,10 @@ requirements; it is not an independent grant of permission to change live config
 | 3 Design/model | Review docs/design.md; schemas and validation; no generator until reviewed | M1 (2026-10-19): schema v2 model, `validate`, read-only `resolve` with capability gaps, brand-studio golden output for both harnesses. Model approved and merged 2026-10-19. |
 | 4 Inventory | Explicitly authorized real roots, skill/config/MCP/plugin discovery, usage adapters, matrix, drift report | M2 (2026-10-19): inventory reads Claude/Codex plugins, marketplaces, MCP (with redacted args), hooks, installed plugin shas and managed blocks over explicit roots; `doctor` reports tools, MCP launchability, unmanaged slot conflicts, stale and ineffective disables, pin drift, pending trust and hook heartbeats. Usage adapters and the drift matrix are still pending. |
 | 5 Triage | Proposed classifications/diffs; confirm choices; archive retirement; commit warehouse | Pending inventory review |
-| 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | Pending |
+| 6 Core/apply | Sandbox policy tests, preview global diff, confirm apply, verify trust and effectiveness | M3 (2026-10-19): ledger with loadout/profile attribution, journaled project apply, `plan/apply/use/off/status/eject`, generators for brand-studio's targets; sandbox acceptance green. Writes are refused outside `$KITCTL_SANDBOX`. User-scope generators, setup execution and live apply pending. |
 | 7 Capture | Guidance, write guards, incremental reconcile, loop prevention, measured <300ms warm path | Pending |
 | 8 Pilot | Select low-risk repo; preview/apply, harness smoke tests, migration runbook | Pending user repo choice |
-| 9 Removal | Purge restores baseline; eject preserves effective config with zero Kit dependencies | Ledger/removal tests must precede first real apply |
+| 9 Removal | Purge restores baseline; eject preserves effective config with zero Kit dependencies | Sandbox proofs (M3): `off` restores the baseline byte for byte; eject leaves native files with no Kit markers, ledger or state. |
 
 Implement and prove the ledger, conflicts, interrupted-write recovery, purge, and
 eject in the sandbox before any real apply, rather than leaving those proofs until

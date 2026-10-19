@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "ruamel-yaml>=0.18.10,<0.19",
+    "tomlkit>=0.13.2,<0.14",
 ]
 
 [project.scripts]
