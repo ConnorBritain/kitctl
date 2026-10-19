@@ -100,6 +100,10 @@ def _git(args: list[str], cwd: Path | None = None) -> str:
         "core.hooksPath=" + os.devnull,
         "-c",
         "core.fsmonitor=false",
+        # <repo>@<40-hex sha> plus .git/objects/pack/pack-<sha>.idx passes Windows' 260-char
+        # MAX_PATH under deep temp dirs; Git for Windows only reads such paths with longpaths.
+        "-c",
+        "core.longpaths=true",
         "-c",
         "protocol.file.allow=always",
         "-c",
