@@ -84,6 +84,13 @@ file has been edited.
 
 ## Apply and remove (only after authorization)
 
+As written, these commands are refused. Every write checks that the project
+resolves inside `$KITCTL_SANDBOX`, and that check is the authorization gate.
+Do not point `KITCTL_SANDBOX` at a directory containing a real repository to
+get past it. A live apply needs a separately reviewed change to kitctl that
+replaces the guard with an explicit, owner-approved opt-in. Until then, run
+the commands below against a sandbox copy of the pilot.
+
 ```sh
 kitctl use brand-studio --repo <pilot> --yes      # writes, journaled, ledger in kit.lock
 kitctl status --repo <pilot>                      # each owned entry should be ok
