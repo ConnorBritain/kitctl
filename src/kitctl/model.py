@@ -68,8 +68,17 @@ COMMON_PRIMITIVE = {
 KIND_FIELDS = {
     "skill": {"plugin"},
     "mcp": {"transport", "command", "url", "pin", "args", "env", "headers"},
-    "hook": {"event", "matcher", "command", "timeout", "blocking", "trust", "unless_capability"},
-    "plugin": {"marketplace", "plugin_name", "version", "skills", "hook_provides"},
+    "hook": {
+        "event",
+        "matcher",
+        "command",
+        "timeout",
+        "blocking",
+        "trust",
+        "unless_capability",
+        "heartbeat",
+    },
+    "plugin": {"marketplace", "plugin_name", "version", "skills", "hook_provides", "heartbeat"},
     "marketplace": set(),
     "tool": {"check", "install_hint"},
 }
@@ -366,7 +375,19 @@ def _check_source(value: Any, where: str, problems: list[Problem]) -> None:
         check_relpath(value["path"], f"{where}.path", problems)
 
 
+def _check_heartbeat(value: Any, where: str, problems: list[Problem]) -> None:
+    """A heartbeat is a log in the temp directory: ISO time, tool, cwd per line."""
+    if not isinstance(value, dict) or set(value) != {"tmpfile"}:
+        problems.append(Problem(where, "type", "expected {tmpfile: NAME}"))
+    elif not isinstance(value["tmpfile"], str) or not re.match(
+        r"^[A-Za-z0-9][A-Za-z0-9._-]*$", value["tmpfile"]
+    ):
+        problems.append(Problem(where, "path-traversal", "tmpfile must be a plain file name"))
+
+
 def _check_kind(kind: str, data: dict[str, Any], where: str, problems: list[Problem]) -> None:
+    if "heartbeat" in data:
+        _check_heartbeat(data["heartbeat"], f"{where}.heartbeat", problems)
     if kind == "mcp":
         transport = data.get("transport", "stdio")
         if transport not in {"stdio", "http"}:

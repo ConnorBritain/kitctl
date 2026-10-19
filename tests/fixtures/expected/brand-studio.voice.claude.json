@@ -20,7 +20,7 @@
     {
       "identity": "plugin:brand-builder",
       "layer": "brand-studio",
-      "hash": "kit-hash-v1:sha256:f0c09a87f216ac03ab6914547ce15c65dc91513e989dfa55181d8359f3d75819",
+      "hash": "kit-hash-v1:sha256:da1165c7b2b71fc37cb4276652ec95ec176d35d4b61a20dbbeebd36adbef9fbc",
       "provides": [
         "design.generator",
         "voice.generator"

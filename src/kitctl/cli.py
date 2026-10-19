@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from kitctl import __version__
+from kitctl.doctor import doctor
 from kitctl.inventory import inventory
 from kitctl.model import ModelError, warehouse_root
 from kitctl.resolve import resolve
@@ -49,7 +50,25 @@ def main(argv: list[str] | None = None) -> int:
         help="JSON list of identities enabled outside Kit; enables stale-disable checks.",
     )
     show.add_argument("--json", action="store_true", help="Print the full result as JSON.")
+    health = commands.add_parser(
+        "doctor",
+        help="Report tools, MCP launchability, conflicts and pending trust; fixes nothing.",
+    )
+    health.add_argument("--loadout", metavar="LOADOUT[:PROFILE]", help="Check one loadout.")
+    health.add_argument("--harness", choices=("claude", "codex"), help="Default: both.")
+    health.add_argument(
+        "--root",
+        action="append",
+        type=Path,
+        dest="roots",
+        metavar="PATH",
+        help="Repository or home directory to inspect; repeatable. Defaults to current directory.",
+    )
+    health.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
+    health.add_argument("--json", action="store_true", help="Print the full report as JSON.")
     args = parser.parse_args(argv)
+    if args.command == "doctor":
+        return _doctor(args)
     if args.command == "validate":
         return _validate(args)
     if args.command == "resolve":
@@ -145,3 +164,28 @@ def _print_resolution(result: dict[str, Any]) -> None:
             print(f"    remedy: {gap['remedy']}")
     _print_problems(result["warnings"])
     print("Read only; no files changed.")
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    harnesses = (args.harness,) if args.harness else ("claude", "codex")
+    try:
+        report = doctor(
+            warehouse_root(args.warehouse), args.roots or [Path.cwd()], args.loadout, harnesses
+        )
+    except (OSError, ValueError) as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        for tool in report["tools"]:
+            print(f"{tool['status']:8}  {tool['identity']}  {tool['output']}")
+        for finding in report["findings"]:
+            print(
+                f"{finding['severity']:7}  {finding['check']}: {finding['subject']}: "
+                f"{finding['message']}"
+            )
+            if finding["hint"]:
+                print(f"         hint: {finding['hint']}")
+        print("Doctor reports only; no files changed.")
+    return 1 if any(f["severity"] == "error" for f in report["findings"]) else 0
