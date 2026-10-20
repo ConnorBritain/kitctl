@@ -13,7 +13,7 @@ from kitctl import forge as forging
 from kitctl import scout as scouting
 from kitctl.doctor import doctor
 from kitctl.inventory import inventory
-from kitctl.model import ModelError, warehouse_root
+from kitctl.model import DEFAULT_HARNESSES, HARNESSES, ModelError, warehouse_root
 from kitctl.resolve import resolve
 from kitctl.validate import validate
 
@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         "resolve", help="Print a loadout's effective config and capability gaps; reads only."
     )
     show.add_argument("target", metavar="LOADOUT[:PROFILE]")
-    show.add_argument("--harness", choices=("claude", "codex"), required=True)
+    show.add_argument("--harness", choices=HARNESSES, required=True)
     show.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
     show.add_argument(
         "--observed",
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Report tools, MCP launchability, conflicts and pending trust; fixes nothing.",
     )
     health.add_argument("--loadout", metavar="LOADOUT[:PROFILE]", help="Check one loadout.")
-    health.add_argument("--harness", choices=("claude", "codex"), help="Default: both.")
+    health.add_argument("--harness", choices=HARNESSES, help="Default: claude and codex.")
     health.add_argument(
         "--root",
         action="append",
@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     brief = steps.add_parser("new", help="Write forge/<slug>/brief.yaml.")
     brief.add_argument("slug")
     brief.add_argument("--purpose", required=True)
-    brief.add_argument("--harness", action="append", choices=("claude", "codex"))
+    brief.add_argument("--harness", action="append", choices=HARNESSES)
     brief.add_argument("--repo", action="append", dest="repos", help="Target repo; repeatable.")
     brief.add_argument("--slot", action="append", dest="slots", help="Required slot; repeatable.")
     brief.add_argument("--exclude", action="append", help="Excluded candidate; repeatable.")
@@ -241,7 +241,7 @@ def _print_resolution(result: dict[str, Any]) -> None:
 
 
 def _doctor(args: argparse.Namespace) -> int:
-    harnesses = (args.harness,) if args.harness else ("claude", "codex")
+    harnesses = (args.harness,) if args.harness else DEFAULT_HARNESSES
     try:
         report = doctor(
             warehouse_root(args.warehouse), args.roots or [Path.cwd()], args.loadout, harnesses

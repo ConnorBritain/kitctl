@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from kitctl.inventory import inventory
-from kitctl.model import HARNESSES, ModelError, Primitive, discover, parse_primitive
+from kitctl.model import DEFAULT_HARNESSES, ModelError, Primitive, discover, parse_primitive
 from kitctl.resolve import resolve
 
 Runner = Callable[[list[str]], tuple[int, str]]
@@ -132,9 +132,14 @@ def observe(report: Any, index: Index, harness: str) -> dict[str, Any]:
             add(index.plugins.get((harness, plugin_id)), f"plugin {plugin_id}", f"{scope}: {file}")
             if scope == "local":
                 local_true.add(plugin_id)
-    skill_dirs = {"claude": "/.claude/skills/", "codex": "/.agents/skills/"}[harness]
+    # Cursor has no documented project skill directory, so no skill counts as enabled there.
+    skill_dirs = {"claude": "/.claude/skills/", "codex": "/.agents/skills/"}.get(harness)
     for entry in report["entries"]:
-        if entry["kind"] == "skill" and skill_dirs in entry["path"].replace("\\", "/"):
+        if (
+            skill_dirs
+            and entry["kind"] == "skill"
+            and skill_dirs in entry["path"].replace("\\", "/")
+        ):
             if switches.get(entry["name"], True):
                 add(
                     index.skills.get((harness, entry["name"])),
@@ -173,7 +178,7 @@ def doctor(
     warehouse: Path,
     roots: list[Path],
     target: str | None = None,
-    harnesses: tuple[str, ...] = HARNESSES,
+    harnesses: tuple[str, ...] = DEFAULT_HARNESSES,
     runner: Runner = run_check,
 ) -> dict[str, Any]:
     report = inventory(roots)
@@ -287,7 +292,7 @@ def doctor(
             value = effect["value"]
             if not (isinstance(value, dict) and isinstance(value.get("command"), str)):
                 continue
-            if effect["target"] not in (".mcp.json", ".codex/config.toml"):
+            if effect["target"] not in (".mcp.json", ".codex/config.toml", ".cursor/mcp.json"):
                 continue
             server = effect["key"].rsplit("/", 1)[-1].rsplit(".", 1)[-1]
             if shutil.which(value["command"]) is None:

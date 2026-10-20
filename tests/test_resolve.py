@@ -17,7 +17,7 @@ EXPECTED = FIXTURES / "expected"
 GOLDEN = [
     (target, harness)
     for target in ("brand-studio", "brand-studio:audit", "brand-studio:voice")
-    for harness in ("claude", "codex")
+    for harness in ("claude", "codex", "cursor")
 ]
 
 
@@ -49,7 +49,7 @@ def test_golden_warehouse_validates_cleanly() -> None:
     report = validate(WAREHOUSE)
     assert report["problems"] == []
     assert report["loadouts"] == 2
-    assert report["resolutions"] == 2 * (1 + 2) + 2
+    assert report["resolutions"] == 3 * (1 + 2) + 3  # every loadout and profile, per harness
 
 
 def test_brand_studio_compiles_the_proposal_table() -> None:
@@ -359,3 +359,22 @@ def test_default_warehouse_is_kits_under_home(
     assert main(["validate"]) == 2
     monkeypatch.setenv("KIT_WAREHOUSE", str(WAREHOUSE))
     assert main(["validate"]) == 0
+
+
+def test_external_mcp_without_launch_spec_is_a_gap_not_a_crash(tmp_path: Path) -> None:
+    # An external MCP primitive skips kind checks; resolve must report it, not raise KeyError.
+    (tmp_path / "primitives" / "mcp").mkdir(parents=True)
+    (tmp_path / "loadouts").mkdir()
+    (tmp_path / "primitives" / "mcp" / "linear.yaml").write_text(
+        "schema_version: 2\nkind: mcp\nname: linear\ndescription: managed elsewhere\n"
+        "external: true\nharnesses: { claude: {}, codex: {} }\n"
+    )
+    (tmp_path / "loadouts" / "flow.yaml").write_text(
+        "schema_version: 2\nname: flow\ndescription: d\nextends: []\n"
+        "mcp:\n  linear: { primitive: mcp:linear }\n"
+    )
+    report = validate(tmp_path)
+    assert [p for p in report["problems"] if p["severity"] == "error"] == []
+    for harness in ("claude", "codex"):
+        result = resolve(tmp_path, "flow", harness)
+        assert any(g["capability"] == "mcp_external" for g in result["gaps"])

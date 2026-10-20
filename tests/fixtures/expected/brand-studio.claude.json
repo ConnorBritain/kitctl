@@ -317,6 +317,7 @@
   ],
   "instructions": {
     "target": "CLAUDE.md",
+    "format": "markdown-block",
     "marker": "kit:brand-studio",
     "layers": [
       "brand-studio"

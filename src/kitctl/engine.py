@@ -29,7 +29,7 @@ from ruamel.yaml import YAML
 
 from kitctl import __version__, formats
 from kitctl.formats import MISSING, FormatError, Style, detect_style
-from kitctl.model import ModelError, is_traversal
+from kitctl.model import DEFAULT_HARNESSES, HARNESSES, ModelError, is_traversal
 from kitctl.resolve import resolve, split_target
 
 INTENT = "kit.yaml"
@@ -40,7 +40,13 @@ LOCKFILE = f"{STATE}/lock"
 PREIMAGES = f"{STATE}/preimages"
 LEDGER_VERSION = 1
 SANDBOX_ENV = "KITCTL_SANDBOX"
-JSON_TARGETS = {".claude/settings.json", ".mcp.json", ".codex/hooks.json"}
+JSON_TARGETS = {
+    ".claude/settings.json",
+    ".mcp.json",
+    ".codex/hooks.json",
+    ".cursor/mcp.json",
+    ".cursor/hooks.json",
+}
 
 
 class EngineError(Exception):
@@ -105,21 +111,21 @@ def _yaml() -> YAML:
 def read_intent(repo: Path) -> dict[str, Any]:
     path = repo / INTENT
     if not path.exists():
-        return {"schema_version": 1, "loadouts": [], "harnesses": ["claude", "codex"]}
+        return {"schema_version": 1, "loadouts": [], "harnesses": list(DEFAULT_HARNESSES)}
     data = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict) or set(data) - {"schema_version", "loadouts", "harnesses"}:
         raise EngineError(f"{path}: expected schema_version, loadouts and harnesses only")
     if data.get("schema_version") != 1:
         raise EngineError(f"{path}: unsupported schema_version {data.get('schema_version')!r}")
     loadouts = data.get("loadouts") or []
-    harnesses = data.get("harnesses") or ["claude", "codex"]
+    harnesses = data.get("harnesses") or list(DEFAULT_HARNESSES)
     if not all(isinstance(item, str) for item in loadouts):
         raise EngineError(f"{path}: loadouts must be strings like brand-studio[:profile]")
     names = [split_target(item)[0] for item in loadouts]
     if len(set(names)) != len(names):
         raise EngineError(f"{path}: a loadout may appear once (one profile at a time)")
-    if not set(harnesses) <= {"claude", "codex"}:
-        raise EngineError(f"{path}: harnesses must be claude and/or codex")
+    if not isinstance(harnesses, list) or not set(harnesses) <= set(HARNESSES):
+        raise EngineError(f"{path}: harnesses must be a list of {', '.join(HARNESSES)}")
     return {"schema_version": 1, "loadouts": list(loadouts), "harnesses": list(harnesses)}
 
 
@@ -221,7 +227,7 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
                 effects.append(
                     {
                         "target": block["target"],
-                        "format": "markdown-block",
+                        "format": block["format"],
                         "key": block["marker"],
                         "value": block["text"],
                     }
@@ -270,7 +276,11 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
 
 
 class Doc:
-    """One native file being edited in memory."""
+    """One native file being edited in memory.
+
+    Formats: "json" and "toml" (owned keys), "markdown-block" (a marked region Kit appends)
+    and "file" (a whole generated file Kit owns by path; its one entry's value is the text).
+    """
 
     def __init__(self, repo: Path, target: str, fmt: str) -> None:
         if is_traversal(target):
@@ -317,6 +327,8 @@ class Doc:
             return current
         if self.fmt == "toml":
             return formats.toml_get(self.doc, key)
+        if self.fmt == "file":
+            return MISSING if self.before is None else self.text.replace("\r\n", "\n")
         return formats.block_get(self.text, key)
 
     def insert(self, key: str, value: Any) -> tuple[list[str], dict[str, Any]]:
@@ -326,6 +338,9 @@ class Doc:
             return formats.json_set(self.doc, key, value), {}
         if self.fmt == "toml":
             return formats.toml_set(self.doc, key, value), {}
+        if self.fmt == "file":
+            self.text = value  # only reached when the file is absent: Kit never overwrites one
+            return [], {}
         self.text, separator = formats.block_insert(self.text, key, value)
         return [], {"separator": separator}
 
@@ -340,6 +355,8 @@ class Doc:
             formats.json_delete(self.doc, entry["key"], entry["value"], created)
         elif self.fmt == "toml":
             formats.toml_delete(self.doc, entry["key"], created)
+        elif self.fmt == "file":
+            self.text = ""  # empty: deleted below because Kit created it
         else:
             self.text = formats.block_remove(self.text, entry["key"], entry.get("separator", ""))
 

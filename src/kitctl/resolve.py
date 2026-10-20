@@ -30,6 +30,9 @@ RESOLVE_FORMAT = 1
 SET_FIELDS = ("skills", "hooks", "plugins", "marketplaces")
 TOOL_FIELDS = ("requires", "optional")
 PACKAGE_RUNNERS = {"npx": ["-y"], "bunx": [], "pnpx": [], "uvx": []}
+# Claude-style tool names that only edit files; a PostToolUse hook limited to these maps
+# onto Cursor's afterFileEdit. Every other event and matcher has no known Cursor mapping.
+EDIT_TOOLS = {"Edit", "MultiEdit", "NotebookEdit", "Write", "apply_patch"}
 
 
 @dataclass
@@ -250,6 +253,23 @@ def _launch(primitive: Primitive) -> tuple[str, list[str]]:
     return command, args
 
 
+def _cursor_event(event: str, matcher: str) -> str | None:
+    if event == "Stop":
+        return "stop"
+    tools = {part.strip() for part in matcher.split("|")} if matcher else set()
+    if event == "PostToolUse" and tools and tools <= EDIT_TOOLS:
+        return "afterFileEdit"
+    return None
+
+
+def _mdc(name: str, body: str) -> str:
+    """A Cursor rule file that always applies. Loadout names are slugs, so this YAML is safe."""
+    return (
+        f"---\ndescription: Working rules from the {name} loadout\nalwaysApply: true\n---\n\n"
+        f"{body.strip()}\n"
+    )
+
+
 def _github_slug(url: str) -> str | None:
     prefix = "https://github.com/"
     if url.startswith(prefix):
@@ -295,6 +315,21 @@ class Compiler:
         fallback = "managed instruction block (soft rule)" if soft_rule else None
         self.gaps.append(_gap(self.name, subject, capability, severity, reason, remedy, fallback))
 
+    def unverified(self, subject: str, capability: str) -> None:
+        """One `unverified` gap per subject for a fact the installed harness never confirmed."""
+        fact = self.fact(capability)
+        if fact.evidence == "verified" or any(
+            g["subject"] == subject and g["capability"] == capability for g in self.gaps
+        ):
+            return
+        self.gap(
+            subject,
+            capability,
+            "unverified",
+            f"{fact.evidence} only: {fact.note}",
+            remedy=f"probe it with an installed {self.name} in a sandbox before the first apply",
+        )
+
     def native(self, primitive: Primitive, key: str) -> str | None:
         return primitive.harnesses.get(self.name, {}).get(key)
 
@@ -315,6 +350,15 @@ class Compiler:
         source = primitive.data.get("source", {})
         url, sha, tag = source.get("git"), source.get("sha"), source.get("tag")
         name = self.marketplace_name(primitive)
+        if self.name == "cursor":
+            self.gap(
+                primitive.identity,
+                "marketplace_file",
+                "manual-step",
+                self.fact("marketplace_file").note,
+                remedy=f"add {url} (at {tag or sha}) as a plugin marketplace in Cursor by hand",
+            )
+            return
         if self.name == "claude":
             native: dict[str, Any] = {"source": "git", "url": url}
             if tag:
@@ -377,6 +421,18 @@ class Compiler:
             )
 
     def plugin(self, primitive: Primitive, layer: str, loaded: dict[str, Primitive]) -> None:
+        if self.name == "cursor":
+            name = self.native(primitive, "id") or primitive.data.get(
+                "plugin_name", primitive.name.rsplit("/", 1)[-1]
+            )
+            self.gap(
+                primitive.identity,
+                "plugin_enable",
+                "manual-step",
+                self.fact("plugin_enable").note,
+                remedy=f"install the {name} plugin from the Cursor marketplace by hand",
+            )
+            return
         native = self.plugin_id(primitive, loaded)
         if native is None:
             self.gap(
@@ -418,11 +474,58 @@ class Compiler:
 
     def mcp(self, server: str, entry: dict[str, Any], primitive: Primitive, layer: str) -> None:
         data = primitive.data
+        if data.get("external") and not data.get("command") and not data.get("url"):
+            # External means configured outside Kit; with no launch spec there is
+            # nothing Kit can write, so say so instead of failing on a missing key.
+            self.gap(
+                primitive.identity,
+                "mcp_external",
+                "manual-step",
+                "external MCP server with no command or url; Kit writes nothing for it",
+                remedy="configure it in the harness yourself, or give the primitive a command "
+                "or url",
+            )
+            return
         env = data.get("env", {})
         filters = {k: entry[k] for k in ("enabled_tools", "disabled_tools") if k in entry}
+        value: dict[str, Any]
+        if self.name == "cursor":
+            # Cursor interpolates ${env:NAME}; values are references, never secrets.
+            if data.get("transport", "stdio") == "http":
+                value = {"url": data["url"]}
+                refs = data.get("headers", {})
+                if refs:
+                    value["headers"] = {k: f"${{env:{v['env']}}}" for k, v in sorted(refs.items())}
+            else:
+                command, args = _launch(primitive)
+                value = {"command": command, "args": args}
+                refs = env
+                if refs:
+                    value["env"] = {k: f"${{env:{v['env']}}}" for k, v in sorted(refs.items())}
+            self.add(
+                ".cursor/mcp.json",
+                "json",
+                f"/mcpServers/{server}",
+                value,
+                primitive.identity,
+                layer,
+                "mcp_project_file",
+            )
+            self.unverified(primitive.identity, "mcp_project_file")
+            if refs:
+                self.unverified(f"mcp:{server}", "mcp_env_reference")
+            if filters:
+                self.gap(
+                    f"mcp:{server}",
+                    "mcp_tool_filter",
+                    "unsupported",
+                    "no per-tool filter key is documented for Cursor's mcp.json",
+                    remedy="turn tools off in Cursor's MCP settings by hand, or drop the filter",
+                )
+            return
         if self.name == "claude":
             if data.get("transport", "stdio") == "http":
-                value: dict[str, Any] = {"type": "http", "url": data["url"]}
+                value = {"type": "http", "url": data["url"]}
                 headers = data.get("headers", {})
                 if headers:
                     value["headers"] = {k: f"${{{v['env']}}}" for k, v in sorted(headers.items())}
@@ -482,6 +585,51 @@ class Compiler:
 
     def hook(self, primitive: Primitive, layer: str) -> None:
         data = primitive.data
+        if self.name == "cursor":
+            event = _cursor_event(data["event"], data["matcher"])
+            if event is None:
+                self.gap(
+                    primitive.identity,
+                    "hook_event",
+                    "unsupported",
+                    f"{data['event']} (matcher {data['matcher']!r}) is not mapped to a Cursor "
+                    "event; Kit maps only Stop and PostToolUse on edit tools",
+                    remedy="write a Cursor-native hook primitive, or drop the hook for Cursor",
+                    soft_rule=f"The {primitive.name} hook does not run in Cursor; do its check "
+                    "by hand.",
+                )
+                return
+            if not any(
+                e["target"] == ".cursor/hooks.json" and e["key"] == "/version" for e in self.effects
+            ):
+                self.add(
+                    ".cursor/hooks.json",
+                    "json",
+                    "/version",
+                    1,
+                    primitive.identity,
+                    layer,
+                    "hooks_project_file",
+                )
+            # afterFileEdit already means "a file was edited", so the tool matcher is dropped.
+            self.add(
+                ".cursor/hooks.json",
+                "json",
+                f"/hooks/{event}/-",
+                {"command": shlex.join(str(part) for part in data["command"])},
+                primitive.identity,
+                layer,
+                "hooks_project_file",
+            )
+            self.unverified(primitive.identity, "hooks_project_file")
+            if "timeout" in data:
+                self.gap(
+                    primitive.identity,
+                    "hook_timeout",
+                    "unverified",
+                    f"no timeout key is known for Cursor hooks; {data['timeout']}s is not written",
+                )
+            return
         native = {
             "matcher": data["matcher"],
             "hooks": [
@@ -522,6 +670,15 @@ class Compiler:
         )
 
     def skill(self, primitive: Primitive, layer: str) -> None:
+        if self.name == "cursor":
+            self.gap(
+                primitive.identity,
+                "skill_dir",
+                "unsupported",
+                self.fact("skill_dir").note,
+                remedy="ship the skill inside a Cursor plugin, or copy it in by hand",
+            )
+            return
         name = primitive.name.rsplit("/", 1)[-1]
         target = f".claude/skills/{name}/" if self.name == "claude" else f".agents/skills/{name}/"
         self.add(
@@ -537,6 +694,16 @@ class Compiler:
                 "disable",
                 "unsupported",
                 f"no {self.name} identity is declared for {subject}",
+                soft_rule=soft,
+            )
+            return
+        if primitive.kind == "plugin" and self.name == "cursor":
+            self.gap(
+                subject,
+                "plugin_disable",
+                "unsupported",
+                self.fact("plugin_disable").note,
+                remedy="disable the plugin in Cursor's settings by hand",
                 soft_rule=soft,
             )
             return
@@ -592,6 +759,15 @@ class Compiler:
                     "unverified",
                     f"single-skill disable{where}: {fact.note}",
                     remedy="sandbox-probe skillOverrides before the first apply",
+                    soft_rule=soft,
+                )
+            elif self.name == "cursor":
+                self.gap(
+                    subject,
+                    "skill_disable",
+                    "unsupported",
+                    fact.note,
+                    remedy="turn the skill off in Cursor by hand, or disable the whole plugin",
                     soft_rule=soft,
                 )
             else:
@@ -838,13 +1014,23 @@ def resolve(
             compiler.skill(loaded[ref], layer)
     for primitive, layer in external_disables:
         compiler.disable(primitive, layer, loaded)
-    if facts.facts["project_trust_required"].supported and compiler.effects:
+    trust = facts.facts["project_trust_required"]
+    if trust.supported and compiler.effects:
         compiler.gap(
             f"loadout:{name}",
             "project_trust",
             "trust-required",
-            facts.facts["project_trust_required"].note + "; Kit never writes trust",
+            trust.note + "; Kit never writes trust",
             remedy="trust the project in Codex before expecting these effects",
+        )
+    elif trust.evidence != "verified" and compiler.effects:
+        # "No trust step" is a guess on this harness: say so rather than stay silent.
+        compiler.gap(
+            f"loadout:{name}",
+            "project_trust",
+            "unverified",
+            trust.note,
+            remedy=f"check in a sandbox whether {harness} needs the project trusted",
         )
 
     text = "\n\n".join(body for _, body in merged.instructions)
@@ -852,9 +1038,22 @@ def resolve(
         rules = "\n".join(f"- {rule}" for rule in sorted(set(compiler.soft_rules)))
         text = f"{text}\n\nSoft rules (the harness cannot enforce these):\n{rules}".strip()
     instructions = None
-    if text:
+    if text and harness == "cursor":
+        # A rule file needs its frontmatter first, so Kit owns the whole generated file
+        # (format "file") instead of appending a marked block; `text` is the full file.
+        instructions = {
+            "target": f".cursor/rules/kit-{name.replace('/', '-')}.mdc",
+            "format": "file",
+            "marker": f"kit:{name}",
+            "layers": [layer for layer, _ in merged.instructions],
+            "text": _mdc(name, text),
+            "owned": True,
+        }
+        compiler.unverified(f"loadout:{name}", "instruction_file")
+    elif text:
         instructions = {
             "target": "CLAUDE.md" if harness == "claude" else "AGENTS.md",
+            "format": "markdown-block",
             "marker": f"kit:{name}",
             "layers": [layer for layer, _ in merged.instructions],
             "text": text,

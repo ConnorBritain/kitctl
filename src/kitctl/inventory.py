@@ -17,6 +17,8 @@ CONFIG_PATHS = (
     ".mcp.json",
     ".codex/config.toml",
     ".codex/hooks.json",
+    ".cursor/mcp.json",
+    ".cursor/hooks.json",
     "CLAUDE.md",
     "AGENTS.md",
     "kit.yaml",

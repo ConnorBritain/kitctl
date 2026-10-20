@@ -8,7 +8,7 @@ authorized.** Every write refuses to run unless the project is inside
 
 | File | Role | Committed? |
 |---|---|---|
-| `kit.yaml` | Intent: `loadouts` (`name` or `name:profile`, one profile per loadout) and `harnesses` | yes |
+| `kit.yaml` | Intent: `loadouts` (`name` or `name:profile`, one profile per loadout) and `harnesses` (`claude`, `codex`, `cursor`; default `[claude, codex]`) | yes |
 | `kit.lock` | Ledger: every owned entry with its owners (loadout and profile), the parents and files Kit created, and the warehouse commit. A checksum detects hand edits. | yes |
 | `.kit/` | Local recovery state: `lock`, `journal.json`, and `preimages/` (original bytes of files Kit edits). It contains its own `.gitignore` (`*`). | no |
 
@@ -38,7 +38,14 @@ Every write takes `--dry-run`. Without `--yes`, nothing is written.
 | Claude | `.mcp.json` | `mcpServers.<id>` |
 | Codex | `.codex/config.toml` | `[mcp_servers.<id>]`, `[plugins."<id>"] enabled` (via tomlkit, comments kept) |
 | Codex | `.codex/hooks.json` | fallback hook entries (array elements owned by value) |
-| both | `CLAUDE.md` / `AGENTS.md` | `<!-- kit:begin NAME -->` … `<!-- kit:end NAME -->` |
+| Cursor | `.cursor/mcp.json` | `mcpServers.<id>`, env and headers as `${env:NAME}` |
+| Cursor | `.cursor/hooks.json` | `version`, and `hooks.<event>` entries (array elements owned by value) |
+| Cursor | `.cursor/rules/kit-NAME.mdc` | the whole generated file (format `file`): frontmatter `alwaysApply: true`, then the instructions |
+| Claude, Codex | `CLAUDE.md` / `AGENTS.md` | `<!-- kit:begin NAME -->` … `<!-- kit:end NAME -->` |
+
+Every Cursor fact is documented only, never verified (see
+[harness reference](harness-reference.md#cursor-documented-only-2026-10-20)), so each
+Cursor effect also comes with an `unverified` gap.
 
 ## Rules
 

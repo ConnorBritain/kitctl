@@ -22,6 +22,7 @@ from typing import Any
 from ruamel.yaml import YAML
 
 from kitctl.model import (
+    DEFAULT_HARNESSES,
     HARNESSES,
     KIND_DIRS,
     NAME_RE,
@@ -114,7 +115,7 @@ def new_brief(
         "schema_version": 1,
         "slug": slug,
         "purpose": purpose,
-        "harnesses": harnesses or list(HARNESSES),
+        "harnesses": harnesses or list(DEFAULT_HARNESSES),
         "target_repos": target_repos or [],
         "constraints": {
             "licenses": {"allow": allow or list(DEFAULT_ALLOW), "deny": []},
@@ -144,7 +145,7 @@ def check_brief(brief: Any) -> list[str]:
     if not isinstance(brief.get("purpose"), str) or not brief["purpose"].strip():
         problems.append("brief.purpose: required")
     if not set(brief.get("harnesses", [])) <= set(HARNESSES):
-        problems.append("brief.harnesses: claude and/or codex")
+        problems.append(f"brief.harnesses: any of {', '.join(HARNESSES)}")
     constraints = brief.get("constraints", {})
     if not isinstance(constraints, dict):
         problems.append("brief.constraints: expected a mapping")

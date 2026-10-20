@@ -1,7 +1,7 @@
 # Kit (`kitctl`)
 
 Kit inventories the skills, MCP configuration, hooks, and plugins used by coding
-agents. The planned compiler manages named **loadouts** from a separate private
+agents (Claude Code, Codex and, documented but not yet verified, Cursor). The planned compiler manages named **loadouts** from a separate private
 warehouse and writes each harness's native configuration with an ownership ledger.
 The planned default warehouse location is `~/kits`; setup will ask which parent
 directories contain your repositories.
@@ -43,6 +43,7 @@ Loadouts (read-only; nothing is written):
 uv run kitctl validate ~/kits
 uv run kitctl resolve brand-studio --harness claude --warehouse ~/kits
 uv run kitctl resolve brand-studio:audit --harness codex --json
+uv run kitctl resolve brand-studio --harness cursor   # documented facts only; see the gaps
 ```
 
 `doctor` checks a loadout against what is actually installed in the roots you

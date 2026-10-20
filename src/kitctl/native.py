@@ -1,5 +1,7 @@
 """Read native harness state in explicit roots: plugins, marketplaces, MCP, hooks, blocks.
 
+Claude Code, Codex and Cursor (.cursor/mcp.json and .cursor/hooks.json only).
+
 Read-only. Values that may be secrets are never reported: MCP env and header
 values become "reference" or "literal", suspicious arguments are redacted, and
 URLs lose credentials and query strings. Trust stores (Codex hooks.state and
@@ -19,7 +21,7 @@ from kitctl.model import SECRET_RES
 
 REDACTED = "<redacted>"
 SENSITIVE_FLAG = re.compile(r"(?i)^--?[a-z0-9-]*(token|secret|password|passwd|api-?key|auth)")
-ENV_REF = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$")
+ENV_REF = re.compile(r"^\$\{(?:env:)?[A-Za-z_][A-Za-z0-9_]*\}$")  # ${NAME}; Cursor ${env:NAME}
 BLOCK_RE = re.compile(r"<!--\s*kit:(begin|end)\s+([a-z0-9][a-z0-9._/-]*)\s*-->")
 
 
@@ -300,6 +302,31 @@ class Reader:
         if isinstance(data, dict):
             self._hooks(data.get("hooks"), "codex", scope, relative)
 
+    def cursor_mcp(self, relative: str, scope: str) -> None:
+        data = self._load(relative, "json")
+        if isinstance(data, dict):
+            self._servers(data.get("mcpServers"), "cursor", scope, relative)
+
+    def cursor_hooks(self, relative: str, scope: str) -> None:
+        """{"version": 1, "hooks": {"<event>": [{"command", "matcher"?, ...}]}}: flat entries."""
+        data = self._load(relative, "json")
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        if not isinstance(hooks, dict):
+            return
+        for event, items in sorted(hooks.items()):
+            for hook in items if isinstance(items, list) else []:
+                if isinstance(hook, dict):
+                    self.hooks.append(
+                        {
+                            "harness": "cursor",
+                            "scope": scope,
+                            "file": self._where(relative),
+                            "event": event,
+                            "matcher": hook.get("matcher", ""),
+                            "command": " ".join(redact_args(str(hook.get("command", "")).split())),
+                        }
+                    )
+
     def managed_blocks(self, relative: str) -> None:
         path = self.root / relative
         if not path.exists() or not _safe(path, self.root):
@@ -363,6 +390,8 @@ def read_native(root: Path, home: Path) -> dict[str, Any]:
         reader.claude_mcp_file()
         reader.codex_config(".codex/config.toml", "project")
         reader.codex_hooks(".codex/hooks.json", "project")
+        reader.cursor_mcp(".cursor/mcp.json", "project")
+        reader.cursor_hooks(".cursor/hooks.json", "project")
     else:
         # ~/.claude.json, or inside the config dir when CLAUDE_CONFIG_DIR=~/.claude.
         reader.claude_user_state(".claude.json")
@@ -370,6 +399,8 @@ def read_native(root: Path, home: Path) -> dict[str, Any]:
         reader.claude_installed(".claude/plugins/installed_plugins.json")
         reader.codex_config(".codex/config.toml", "user")
         reader.codex_hooks(".codex/hooks.json", "user")
+        reader.cursor_mcp(".cursor/mcp.json", "user")
+        reader.cursor_hooks(".cursor/hooks.json", "user")
     for name in ("CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"):
         reader.managed_blocks(name)
     return {
