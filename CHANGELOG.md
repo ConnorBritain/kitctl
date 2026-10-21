@@ -9,7 +9,7 @@
   edit-only `PostToolUse` hooks to `.cursor/hooks.json` (`stop`, `afterFileEdit`),
   and generates the instruction block as a whole `.cursor/rules/kit-<loadout>.mdc`
   rule file (`alwaysApply: true`), which `off` removes and eject keeps. Plugins,
-  marketplaces, skills, disables and other hook events are gaps with remedies and
+  marketplaces, disables and other hook events are gaps with remedies and
   soft rules. Every Cursor fact is documented only, from Cursor's docs and
   cursor/plugins@29fa938, so each Cursor effect also carries an `unverified` gap.
   Inventory and doctor read `.cursor/mcp.json` and `.cursor/hooks.json`. kit.yaml and
