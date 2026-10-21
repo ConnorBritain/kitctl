@@ -107,12 +107,40 @@ Version 1 allows `name`, `description`, `extends`, `skills`, `mcp`, `hooks` and
 | `requires`, `optional` | tool refs; `doctor` checks them, and Kit never installs tools |
 | `setup` | `[{run: [...], when: file-exists:PATH, outputs: [...], harness: any\|claude\|codex\|cursor}]` |
 | `instructions` | text for the managed `CLAUDE.md` / `AGENTS.md` block, or the generated Cursor rule file `.cursor/rules/kit-<loadout>.mdc` |
-| `profiles` | `{name: {description, skills, agents, mcp, hooks, plugins, marketplaces, requires, optional, setup, instructions_append}}` |
+| `budget` | `{tokens: N, skills: N}`, each optional and a positive integer: the always-on listing this loadout is allowed (see below) |
+| `profiles` | `{name: {description, skills, agents, mcp, hooks, plugins, marketplaces, requires, optional, setup, instructions_append, budget}}` |
 
 A profile is addressed as `loadout:profile`. Each field present in a profile
 replaces that field, and its entries must already be in the loadout: a profile
 is a subset and never adds anything. Disables and slots carry over. A slot whose
 provider the profile removed is reported as `unfilled`.
+
+### Budget
+
+Every session lists the instruction block, each model-invocable skill and each agent
+before any work starts. `budget` caps that listing: `tokens` for the estimated text
+(`ceil(chars / 4)`, the method Gestalt uses), `skills` for the number of listed skills.
+Each number comes from the most specific layer that sets it: a child overrides its
+parent, and a profile's `budget` overrides the loadout's.
+
+`kitctl doctor` measures the listing per harness (`listing_cost` in its JSON) for the
+active set: `--loadout` plus every loadout in the `kit.yaml` of each root it inspects
+(`~/.kit/kit.yaml` when the root is home, since user and project loadouts list together).
+It counts:
+
+- the instruction block's text;
+- each listed skill as `name: description`: a warehouse skill from its `SKILL.md`
+  frontmatter (else the primitive's `description`), a plugin's skills from the
+  `SKILL.md` files of the installed Claude Code plugin (read when home is a root);
+- each agent as `name: description`.
+
+A skill with `disable-model-invocation: true` is not listed and costs nothing; a skill the
+loadout disables does not count. What doctor cannot read is named under `not_measured`
+instead of guessed: plugin skills that are not installed (or are on a harness whose plugin
+installs Kit cannot see) and MCP servers, whose tool lists exist only once a server runs.
+When the active set is over the strictest `budget` among its loadouts, doctor adds a
+`budget` warning naming the number that is over and by how much. It is never an error, so
+doctor's exit code does not change.
 
 ## Resolution rules
 

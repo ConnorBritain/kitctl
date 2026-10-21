@@ -115,6 +115,7 @@ V2_LOADOUT = V1_LOADOUT | {
     "instructions",
     "profiles",
     "agents",
+    "budget",
 }
 LIST_FIELDS = {
     "skills": "skill",
@@ -137,7 +138,9 @@ PROFILE_FIELDS = {
     "setup",
     "instructions_append",
     "agents",
+    "budget",
 }
+BUDGET_KEYS = ("tokens", "skills")
 SETUP_KEYS = {"run", "when", "outputs", "harness"}
 MCP_ENTRY_KEYS = {"primitive", "enabled_tools", "disabled_tools"}
 
@@ -216,6 +219,7 @@ class Loadout:
     optional: list[str] = field(default_factory=list)
     setup: list[dict[str, Any]] = field(default_factory=list)
     instructions: str = ""
+    budget: dict[str, int] = field(default_factory=dict)
     profiles: dict[str, Profile] = field(default_factory=dict)
 
 
@@ -725,6 +729,24 @@ def _parse_setup(value: Any, where: str, problems: list[Problem]) -> list[dict[s
     return steps
 
 
+def _parse_budget(value: Any, where: str, problems: list[Problem]) -> dict[str, int]:
+    """budget: {tokens, skills}, each optional and a positive integer."""
+    if not isinstance(value, dict):
+        problems.append(Problem(where, "type", "expected {tokens: N, skills: N}"))
+        return {}
+    _unknown(value, set(BUDGET_KEYS), where, problems)
+    budget: dict[str, int] = {}
+    for key in BUDGET_KEYS:
+        if key not in value:
+            continue
+        item = value[key]
+        if isinstance(item, bool) or not isinstance(item, int) or item <= 0:
+            problems.append(Problem(f"{where}.{key}", "type", "expected a positive integer"))
+        else:
+            budget[key] = item
+    return budget
+
+
 def _parse_lists(
     data: dict[str, Any], where: str, problems: list[Problem], fields: set[str]
 ) -> dict[str, list[str]]:
@@ -794,6 +816,8 @@ def parse_loadout(root: Path, name: str) -> Loadout:
         if parsed := parse_ref(item, f"{where}.disable", problems):
             loadout.disable.append(parsed)
     loadout.setup = _parse_setup(data.get("setup", []), f"{where}.setup", problems)
+    if "budget" in data:
+        loadout.budget = _parse_budget(data["budget"], f"{where}.budget", problems)
     if "instructions" in data:
         if isinstance(data["instructions"], str):
             loadout.instructions = data["instructions"]
@@ -817,6 +841,8 @@ def parse_loadout(root: Path, name: str) -> Loadout:
             fields["mcp"] = _parse_mcp_map(spec["mcp"] or {}, f"{pwhere}.mcp", problems)
         if "setup" in spec:
             fields["setup"] = _parse_setup(spec["setup"] or [], f"{pwhere}.setup", problems)
+        if "budget" in spec:
+            fields["budget"] = _parse_budget(spec["budget"], f"{pwhere}.budget", problems)
         for key in ("description", "instructions_append"):
             if key in spec:
                 if isinstance(spec[key], str):

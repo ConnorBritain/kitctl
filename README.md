@@ -13,7 +13,8 @@ puts back exactly what was there.
 - apply loadouts to a project or to your home (`--user`): `use`, `off`, `apply`,
   `status`, `eject`, each showing its plan and asking before it writes;
 - copy warehouse skill folders and worker agents, and run a loadout's setup steps (after
-  asking).
+  asking);
+- estimate each harness's always-on listing and hold it to a loadout `budget` (`doctor`).
 
 Kit never writes trust: approving hooks, MCP servers and projects stays with you.
 
@@ -64,6 +65,10 @@ name. It never fixes anything or starts an MCP server:
 ```sh
 uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
 ```
+
+It also estimates the always-on listing each harness carries for the loadout plus the
+roots' `kit.yaml` loadouts (instruction block, listed skills and agents, `ceil(chars / 4)`)
+and warns when it is over a loadout's `budget` (see [the model](docs/model.md#budget)).
 
 `use`, `off`, `plan`, `apply`, `status` and `eject` manage a project's native
 config through an ownership ledger. They show the plan and ask before writing

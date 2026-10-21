@@ -18,6 +18,14 @@ byte-for-byte undo.
   `claude.md` frontmatter name that differs from the file name. Inventory lists
   `.claude/agents/*.md` and `.codex/agents/*.toml`; `init` makes `primitives/agents/`;
   forge and `vendor` refuse agents.
+- Listing cost: `doctor` estimates each harness's always-on listing (instruction block,
+  listed skills and agents as `name: description`, `ceil(chars / 4)` as in Gestalt) for
+  `--loadout` plus the loadouts in each root's `kit.yaml`, and names what it cannot
+  measure (plugin skills it cannot read, MCP servers). Skills with
+  `disable-model-invocation: true` and skills the loadout disables cost nothing. A loadout
+  or profile `budget: {tokens, skills}` turns an over-budget listing into a `budget`
+  warning (never an error); the child layer or profile overrides its parent.
+
 - User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
   `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
   `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring

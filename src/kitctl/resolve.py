@@ -46,6 +46,8 @@ class Merged:
     disable: list[tuple[str, str]] = field(default_factory=list)
     setup: list[tuple[dict[str, Any], str]] = field(default_factory=list)
     instructions: list[tuple[str, str]] = field(default_factory=list)
+    # Listing budget: each number from the most specific layer (or profile) that sets it.
+    budget: dict[str, tuple[int, str]] = field(default_factory=dict)
 
 
 def split_target(target: str) -> tuple[str, str | None]:
@@ -134,6 +136,8 @@ def _merge(layers: list[Loadout], problems: list[Problem]) -> Merged:
                 merged.setup.append((step, layer.name))
         if layer.instructions.strip():
             merged.instructions.append((layer.name, layer.instructions.strip()))
+        for key, number in layer.budget.items():
+            merged.budget[key] = (number, layer.name)  # parents come first: the child wins
     for ref in merged.tools["optional"].copy():
         if ref in merged.tools["requires"]:
             del merged.tools["optional"][ref]
@@ -189,6 +193,23 @@ def _apply_profile(top: Loadout, profile: str, merged: Merged, problems: list[Pr
         merged.setup = [(step, top.name) for step in fields["setup"]]
     if fields.get("instructions_append", "").strip():
         merged.instructions.append((f"{top.name}:{profile}", fields["instructions_append"].strip()))
+    for key, number in fields.get("budget", {}).items():
+        merged.budget[key] = (number, f"{top.name}:{profile}")
+
+
+def effective(root: Path, target: str) -> Merged:
+    """The merged selections of target ("loadout" or "loadout:profile"), before compiling."""
+    name, profile = split_target(target)
+    if is_traversal(name):
+        raise ModelError([Problem(name, "path-traversal", f"reference escapes: {name!r}")])
+    layers = linearize(root, name)
+    problems: list[Problem] = []
+    merged = _merge(layers, problems)
+    if profile:
+        _apply_profile(layers[-1], profile, merged, problems)
+    if problems:
+        raise ModelError(sorted(set(problems)))
+    return merged
 
 
 def _load(root: Path, refs: set[str], problems: list[Problem]) -> dict[str, Primitive]:
