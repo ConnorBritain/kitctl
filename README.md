@@ -54,14 +54,15 @@ uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
 ```
 
 `use`, `off`, `plan`, `apply`, `status` and `eject` manage a project's native
-config through an ownership ledger. They write inside `$KITCTL_SANDBOX`, or in a
-real repository only with `--live` and that repository's committed opt-in (see
-[apply](docs/apply.md#live-apply)):
+config through an ownership ledger. They show the plan and ask before writing
+(`--yes` skips the question), and `kitctl off` restores the original bytes (see
+[apply](docs/apply.md#writing)):
 
 ```sh
-export KITCTL_SANDBOX=/tmp/kit-sandbox
-uv run kitctl use brand-studio --repo /tmp/kit-sandbox/site --dry-run
-uv run kitctl use brand-studio --repo path/to/repo --live --yes  # after the opt-in
+uv run kitctl use brand-studio --repo path/to/repo --dry-run   # the plan only
+uv run kitctl use brand-studio --repo path/to/repo             # the plan, then [y/N]
+uv run kitctl off brand-studio --repo path/to/repo             # the undo
+KITCTL_SANDBOX=/tmp/kit-sandbox uv run kitctl ...               # confine writes to one directory
 ```
 
 `resolve` prints the effective native config a loadout would produce and every

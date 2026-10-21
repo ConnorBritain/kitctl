@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Writes for everyone (owner decision, 2026-10-21): `use`, `off`, `apply` and `eject` write
+  wherever they are pointed after showing the plan and asking `[y/N]` on a terminal
+  (`--yes` skips it; with no terminal and no `--yes`, nothing is written). The undo is
+  `kitctl off`. A directory that is not a git repository, uncommitted tracked changes and a
+  default branch are warnings, not refusals. `$KITCTL_SANDBOX`, when set, still confines
+  every write. `--live` and `live: true` from the opt-in below are accepted and ignored.
 - Live apply, owner-authorized: outside `$KITCTL_SANDBOX`, `use`, `off`, `apply`
   and `eject` write only with `--live`, a committed `kit.yaml` that says
   `live: true`, no uncommitted tracked changes and a named branch other than

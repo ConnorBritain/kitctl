@@ -1,9 +1,8 @@
 # Pilot runbook: brand-studio
 
 Status, 2026-10-21: only a **dry run** has been done, and it wrote nothing.
-The owner has authorized live apply as a per-repository opt-in
-([apply.md](apply.md#live-apply)); without it, kitctl refuses to write anywhere
-outside `$KITCTL_SANDBOX`.
+Writes now go wherever they are pointed after a confirmation
+([apply.md](apply.md#writing)).
 
 The steps that need the owner are in [owner-checklist.md](owner-checklist.md).
 
@@ -88,19 +87,17 @@ enabled for the user. Without that root, disables are reported as
 heartbeat check reports "fired at …" once the hook has been trusted and a site
 file has been edited.
 
-## Apply and remove (live opt-in)
+## Apply and remove
 
-Outside a sandbox these commands need `--live` and the pilot's own opt-in
-([apply.md](apply.md#live-apply)). Do not point `KITCTL_SANDBOX` at a real
-repository to get past it. Commit after each write, because the next one needs
-a clean tree.
+Each command shows the plan and asks first (`--yes` skips it). Apply on a branch,
+following the repo's own rules; Kit warns on main.
 
 ```sh
-kitctl use brand-studio --repo <pilot> --live --yes      # journaled, ledger in kit.lock
+kitctl use brand-studio --repo <pilot> --yes      # journaled, ledger in kit.lock
 kitctl status --repo <pilot>                             # each owned entry should be ok
-kitctl use brand-studio:audit --repo <pilot> --live --yes  # writes only the delta
-kitctl off brand-studio --repo <pilot> --live --yes      # restores the original bytes
-kitctl eject --repo <pilot> --live --yes                 # or: keep native files, drop Kit
+kitctl use brand-studio:audit --repo <pilot> --yes  # writes only the delta
+kitctl off brand-studio --repo <pilot> --yes      # restores the original bytes
+kitctl eject --repo <pilot> --yes                 # or: keep native files, drop Kit
 ```
 
 `off` removes only brand-studio's entries. If those entries were edited

@@ -60,8 +60,8 @@ that ships inside a plugin.
   base-path feature)
 - [ ] **Managed block placement.** Put it in the root `AGENTS.md`/`CLAUDE.md`
   (applies repo-wide), or in `apps/marketing/AGENTS.md`/`CLAUDE.md`?
-- [x] **Authorize a live apply.** Authorized 2026-10-21, as a per-repository
-  opt-in ([apply.md](apply.md#live-apply)).
+- [x] **Authorize a live apply.** Authorized 2026-10-21. Since 0.1.0 a write needs
+  only a confirmation ([apply.md](apply.md#writing)).
 
 ## 5. After a real apply (only you can do these; Kit never writes trust)
 

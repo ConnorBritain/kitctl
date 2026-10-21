@@ -105,74 +105,36 @@ def _git(repo: Path, *args: str, strip: bool = True) -> str | None:
     return done.stdout.strip() if strip else done.stdout
 
 
-def live_refusals(repo: Path, recovering: bool = False) -> list[str]:
-    """Why a live (non-sandbox) write is refused here; empty when every owner opt-in holds.
-
-    Live apply is the owner's explicit choice, made in the repository itself: the committed
-    kit.yaml says `live: true`, the tracked tree is clean (so git can undo the apply), and the
-    work happens on a named branch: never main, master or the remote's default. The one
-    exception to a clean tree is recovery of an interrupted apply, and only when every
-    uncommitted file is one its journal names (Kit's own writes in flight).
-    """
+def write_warnings(repo: Path) -> list[str]:
+    """What to know before Kit writes here. None of it blocks: `kitctl off` restores the
+    original bytes from Kit's own preimages in .kit/, with or without git."""
     if _git(repo, "rev-parse", "--is-inside-work-tree") != "true":
-        return ["not a git work tree; live apply needs git as its undo"]
-    reasons = []
-    committed = _git(repo, "show", f"HEAD:./{INTENT}")
-    try:
-        data = YAML(typ="safe", pure=True).load(committed) if committed else None
-    except Exception:  # noqa: BLE001 - any unreadable committed kit.yaml means no opt-in
-        data = None
-    if not (isinstance(data, dict) and data.get("live") is True):
-        reasons.append(f"the committed {INTENT} does not say `live: true`")
-    status = _git(repo, "status", "--porcelain", "-z", "--untracked-files=no", strip=False)
-    if status is None or (status and not (recovering and _only_in_flight(repo, status))):
-        reasons.append("tracked files have uncommitted changes; commit or stash them first")
+        return ["not a git repository: `kitctl off` is the undo (Kit keeps the original bytes)"]
+    warnings = []
+    if _git(repo, "status", "--porcelain", "--untracked-files=no"):
+        warnings.append("tracked files have uncommitted changes; Kit's edits will mix with them")
     branch = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
-    if not branch:
-        reasons.append("HEAD is detached; check out a named branch")
-    else:
-        remote_head = _git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
-        protected = {"main", "master"}
-        if remote_head and "/" in remote_head:
-            protected.add(remote_head.split("/", 1)[1])
-        if branch in protected:
-            reasons.append(f"{branch} is a default branch; apply on another branch")
-    return reasons
+    remote_head = _git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    protected = {"main", "master"}
+    if remote_head and "/" in remote_head:
+        protected.add(remote_head.split("/", 1)[1])
+    if branch in protected:
+        warnings.append(f"on {branch}; a branch lets the change be reviewed before it lands")
+    return warnings
 
 
-def _only_in_flight(repo: Path, status: str) -> bool:
-    """Every path in `git status -z` output is a target of the interrupted apply's journal."""
-    try:
-        journal = json.loads((repo / JOURNAL).read_text(encoding="utf-8"))
-        targets = {item["target"] for item in journal["files"]}
-    except (OSError, ValueError, KeyError, TypeError):
-        return False
-    prefix = _git(repo, "rev-parse", "--show-prefix") or ""
-    paths = [entry[3:] for entry in status.split("\0") if len(entry) > 3]
-    return all(p.startswith(prefix) and p[len(prefix) :] in targets for p in paths)
-
-
-def check_write_allowed(repo: Path, live: bool = False, recovering: bool = False) -> None:
-    """Writes land inside $KITCTL_SANDBOX, or in a repo whose owner opted in to live apply."""
+def check_write_allowed(repo: Path) -> None:
+    """When $KITCTL_SANDBOX is set, every write stays inside it (tests, CI, a first try)."""
     sandbox = os.environ.get(SANDBOX_ENV)
-    if sandbox:
-        try:
-            repo.resolve().relative_to(Path(sandbox).resolve())
-            return
-        except ValueError:
-            if not live:
-                raise EngineError(
-                    f"{repo} is outside {SANDBOX_ENV}={sandbox}; refusing to write "
-                    "(a real repository needs --live and its owner's opt-in; see docs/apply.md)"
-                ) from None
-    if not live:
+    if not sandbox:
+        return
+    try:
+        repo.resolve().relative_to(Path(sandbox).resolve())
+    except ValueError:
         raise EngineError(
-            f"writes need a sandbox ({SANDBOX_ENV}) or a live apply: pass --live in a repo "
-            f"whose committed {INTENT} says `live: true` (see docs/apply.md)"
-        )
-    reasons = live_refusals(repo, recovering)
-    if reasons:
-        raise EngineError("live apply refused: " + "; ".join(reasons))
+            f"{repo} is outside {SANDBOX_ENV}={sandbox}; refusing to write "
+            f"(unset {SANDBOX_ENV} to write here)"
+        ) from None
 
 
 def _yaml() -> YAML:
@@ -186,6 +148,7 @@ def read_intent(repo: Path) -> dict[str, Any]:
     if not path.exists():
         return {"schema_version": 1, "loadouts": [], "harnesses": list(DEFAULT_HARNESSES)}
     data = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8")) or {}
+    # `live` was the earlier opt-in to write outside the sandbox; still read, no longer needed.
     keys = {"schema_version", "loadouts", "harnesses", "live"}
     if not isinstance(data, dict) or set(data) - keys:
         raise EngineError(f"{path}: expected schema_version, loadouts, harnesses and live only")
@@ -787,12 +750,12 @@ def _finish(repo: Path, journal: dict[str, Any]) -> None:
         shutil.rmtree(repo / STATE, ignore_errors=True)
 
 
-def recover(repo: Path, live: bool = False) -> bool:
+def recover(repo: Path) -> bool:
     """Roll an interrupted apply forward. Returns True if there was something to recover."""
     path = repo / JOURNAL
     if not path.exists():
         return False
-    check_write_allowed(repo, live, recovering=True)
+    check_write_allowed(repo)
     journal = json.loads(path.read_text(encoding="utf-8"))
     with project_lock(repo):
         _commit_files(repo, journal)
@@ -800,12 +763,12 @@ def recover(repo: Path, live: bool = False) -> bool:
     return True
 
 
-def apply_plan(plan: Plan, live: bool = False) -> list[str]:
+def apply_plan(plan: Plan) -> list[str]:
     """Write a plan. Returns the targets written. Raises without writing on conflicts."""
     repo = plan.repo
     if not plan.changes and not plan.remove_dirs and not plan.conflicts:
         return []  # nothing to write needs no permission (as after a recovery)
-    check_write_allowed(repo, live)
+    check_write_allowed(repo)
     if plan.conflicts:
         raise ConflictError(plan.conflicts)
     changes = plan.changes
@@ -933,9 +896,9 @@ def status(repo: Path, warehouse: Path) -> dict[str, Any]:
     return report
 
 
-def eject(repo: Path, live: bool = False) -> list[str]:
+def eject(repo: Path) -> list[str]:
     """Keep native config as plain files; drop Kit's markers, ledger, intent and state."""
-    check_write_allowed(repo, live)
+    check_write_allowed(repo)
     if (repo / JOURNAL).exists():
         raise EngineError("an earlier apply was interrupted; run `kitctl apply` to recover first")
     ledger = read_ledger(repo)

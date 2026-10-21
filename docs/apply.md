@@ -1,14 +1,14 @@
 # Plan, apply and removal (M3)
 
-Status 2026-10-21: proven in sandbox tests. Live apply is authorized by the
-owner as an explicit opt-in per repository (see [Live apply](#live-apply)).
-Every other write refuses unless the project is inside `$KITCTL_SANDBOX`.
+Status 2026-10-21: writes go wherever you point them, after Kit shows the plan and
+you confirm (see [Writing](#writing)). `$KITCTL_SANDBOX`, when set, confines every write
+to one directory.
 
 ## Files in a project
 
 | File | Role | Committed? |
 |---|---|---|
-| `kit.yaml` | Intent: `loadouts` (`name` or `name:profile`, one profile per loadout), `harnesses` (`claude`, `codex`, `cursor`; default `[claude, codex]`) and the optional `live: true` opt-in | yes |
+| `kit.yaml` | Intent: `loadouts` (`name` or `name:profile`, one profile per loadout), `harnesses` (`claude`, `codex`, `cursor`; default `[claude, codex]`) (a `live: true` from the earlier opt-in is read and ignored) | yes |
 | `kit.lock` | Ledger: every owned entry with its owners (loadout and profile), the parents and files Kit created, and the warehouse commit. A checksum detects hand edits. | yes |
 | `.kit/` | Local recovery state: `lock`, `journal.json`, and `preimages/` (original bytes of files Kit edits). It contains its own `.gitignore` (`*`). | no |
 
@@ -28,45 +28,35 @@ kitctl status                          # loadouts, owned entries (ok/drift/missi
 kitctl eject --yes                     # keep native files, drop kit.yaml, kit.lock, .kit/ and markers
 ```
 
-## Live apply
+## Writing
 
-A write lands in a real repository only when every one of these holds, and
-kitctl names each one that does not:
+`use`, `off`, `apply` and `eject` print the plan, then ask `Write N files? [y/N]` on a
+terminal. `--yes` skips the question (scripts, CI); without a terminal and without
+`--yes`, nothing is written. `--dry-run` shows the plan and never asks.
 
-1. `--live` is on the command line (`use`, `off`, `apply`, `eject`).
-2. The **committed** `kit.yaml` says `live: true`. The opt-in is read from
-   `git show HEAD:./kit.yaml`, so editing the working copy is not enough: the
-   owner commits the decision.
-3. No tracked file has uncommitted changes, so each apply is its own reviewable
-   commit and none of the owner's work is mixed into it. Untracked files do not
-   count. Files git does not track (`.mcp.json` when ignored, say) are restored
-   by `kitctl off` from `.kit/preimages`, not by git. The one exception is
-   recovering an interrupted apply, and only when every uncommitted file is
-   one its journal names.
-4. HEAD is a named branch other than `main`, `master` and the remote's
-   default (`origin/HEAD`).
+The undo is `kitctl off <loadout>`: it removes only that loadout's entries and restores
+the original bytes from `.kit/preimages`, with or without git. Before writing, Kit warns
+(and never refuses) when:
 
-The opt-in records the owner's decision; it is not a lock. Anyone who can
-commit to the repository, an agent with a shell included, can commit
-`live: true`. Review that commit like any other.
+- the directory is not a git repository (`off` is then the only undo);
+- tracked files have uncommitted changes (Kit's edits will mix with them);
+- HEAD is on `main`, `master` or the remote's default branch (a branch lets the change be
+  reviewed before it lands).
 
-`plan`, `status` and `--dry-run` read only and never need the opt-in. A
-sandbox is unchanged: inside `$KITCTL_SANDBOX` no opt-in is needed. Never point
-`KITCTL_SANDBOX` at a real repository to get past these checks.
+When `$KITCTL_SANDBOX` is set, every write must land inside it, so a test run or a first
+try cannot touch anything else. `--live` and `live: true` from the earlier opt-in are accepted and do
+nothing.
 
 ```sh
-git switch -c kit/first-apply
-kitctl use gestalt-flow --dry-run               # review the diff
-# add `live: true` to kit.yaml (create it with `schema_version: 1` if absent)
-git add kit.yaml && git commit -m "kit: opt in to live apply"
-kitctl use gestalt-flow --live --yes
+git switch -c kit/first-apply                   # optional; Kit warns on main
+kitctl use gestalt-flow --dry-run               # the plan, nothing written
+kitctl use gestalt-flow                         # the plan, then [y/N]
 kitctl status                                   # every owned entry should read ok
-git add -A && git commit -m "kit: gestalt-flow" # the next live write needs a clean tree
-kitctl off gestalt-flow --live --yes            # the undo; restores the original bytes
+kitctl off gestalt-flow                         # the undo; restores the original bytes
 ```
 
-Live apply still writes project files only. User-scope (`~/`) targets, setup
-steps and skill directories are not generated; they stay gaps with remedies.
+Kit writes project files only. User-scope (`~/`) targets, setup steps and skill
+directories are not generated; they stay gaps with remedies.
 
 Every write takes `--dry-run`. Without `--yes`, nothing is written.
 

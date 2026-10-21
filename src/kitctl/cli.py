@@ -76,12 +76,8 @@ def main(argv: list[str] | None = None) -> int:
         if writes:
             sub.add_argument("--yes", action="store_true", help="Write without asking.")
             sub.add_argument("--dry-run", action="store_true", help="Show the plan only.")
-            sub.add_argument(
-                "--live",
-                action="store_true",
-                help="Write to a real repo (outside KITCTL_SANDBOX). Needs a committed kit.yaml "
-                "with `live: true`, a clean tree and a non-default branch.",
-            )
+            # The earlier opt-in needed --live; accepted so scripts that pass it still run.
+            sub.add_argument("--live", action="store_true", help=argparse.SUPPRESS)
 
     project(
         commands.add_parser("plan", help="Show the diff kit.yaml would produce; reads only."), False
@@ -287,9 +283,26 @@ def _print_plan(plan: engine.Plan, as_json: bool) -> None:
         print(f"conflict: {conflict}", file=sys.stderr)
 
 
+def _confirm(args: argparse.Namespace, question: str) -> bool:
+    """--yes, or a y at an interactive prompt (on stderr, so --json output stays clean)."""
+    if args.yes:
+        return True
+    if args.dry_run or not sys.stdin.isatty():
+        return False
+    print(f"{question} [y/N] ", end="", file=sys.stderr, flush=True)
+    try:
+        return input().strip().lower() in {"y", "yes"}
+    except EOFError:
+        return False
+
+
 def _project_command(args: argparse.Namespace) -> int:
     repo = (args.repo or Path.cwd()).resolve()
     warehouse = warehouse_root(args.warehouse)
+    if getattr(args, "live", False):
+        print(
+            "kitctl: --live is no longer needed; writes ask first (--yes skips it)", file=sys.stderr
+        )
     try:
         if args.command == "status":
             report = engine.status(repo, warehouse)
@@ -313,21 +326,26 @@ def _project_command(args: argparse.Namespace) -> int:
             drift = any(e["state"] != "ok" for e in report["entries"])
             return 1 if drift or report["interrupted"] else 0
         if args.command == "eject":
-            if not args.yes or args.dry_run:
-                print(
-                    "eject keeps native files and removes kit.yaml, kit.lock, .kit/ and block "
-                    "markers; re-run with --yes"
-                )
-                return 0 if args.dry_run else 1
-            for target in engine.eject(repo, args.live):
+            print(
+                "eject keeps native files and removes kit.yaml, kit.lock, .kit/ and block markers"
+            )
+            if args.dry_run:
+                return 0
+            engine.check_write_allowed(repo)
+            if not _confirm(args, "Eject?"):
+                print("Nothing written; re-run with --yes to eject.", file=sys.stderr)
+                return 1
+            for target in engine.eject(repo):
                 print(f"ejected {target}")
             return 0
         recovered = False
         if args.command != "plan" and (repo / engine.JOURNAL).exists():
-            if args.dry_run or not args.yes:
-                print("an apply was interrupted; re-run with --yes to recover it first")
+            print("an apply was interrupted")
+            engine.check_write_allowed(repo)
+            if not _confirm(args, "Recover it first?"):
+                print("Nothing written; re-run with --yes to recover it first.", file=sys.stderr)
                 return 1
-            recovered = engine.recover(repo, args.live)
+            recovered = engine.recover(repo)
         intent = engine.read_intent(repo)
         if args.command == "use":
             intent = engine.with_loadout(intent, args.target)
@@ -335,12 +353,17 @@ def _project_command(args: argparse.Namespace) -> int:
             intent = engine.without_loadout(intent, args.target)
         plan = engine.make_plan(repo, warehouse, intent)
         _print_plan(plan, args.json)
+        if args.command != "plan" and (plan.changes or plan.remove_dirs) and not plan.conflicts:
+            for warning in engine.write_warnings(repo):
+                print(f"warning: {warning}", file=sys.stderr)
         if args.command == "plan" or args.dry_run:
             return 1 if plan.conflicts else 0
-        if not args.yes:
-            print("Nothing written; re-run with --yes to apply.", file=sys.stderr)
-            return 1
-        written = engine.apply_plan(plan, args.live)
+        if plan.changes or plan.remove_dirs:
+            engine.check_write_allowed(repo)
+            if not plan.conflicts and not _confirm(args, f"Write {len(plan.changes)} files?"):
+                print("Nothing written; re-run with --yes to apply.", file=sys.stderr)
+                return 1
+        written = engine.apply_plan(plan)
         if recovered:
             print("recovered an interrupted apply")
         print(f"wrote {len(written)} files" if written else "already up to date")
