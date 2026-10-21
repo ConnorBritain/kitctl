@@ -17,12 +17,14 @@ CONFIG_PATHS = (
     ".mcp.json",
     ".codex/config.toml",
     ".codex/hooks.json",
+    ".cursor/mcp.json",
+    ".cursor/hooks.json",
     "CLAUDE.md",
     "AGENTS.md",
     "kit.yaml",
     "kit.lock",
 )
-SKILL_PATHS = (".claude/skills", ".agents/skills", ".codex/skills")
+SKILL_PATHS = (".claude/skills", ".agents/skills", ".codex/skills", ".cursor/skills")
 
 
 @dataclass(frozen=True)

@@ -44,8 +44,8 @@ sandbox probes are required before claiming installed support.
   and project .codex. Relative project config paths resolve from .codex.
 - [Skills](https://learn.chatgpt.com/docs/build-skills): user ~/.agents/skills;
   repository .agents/skills directories between CWD and repo root; admin/system
-  locations also exist. Duplicate names do not merge. Treat legacy .codex/skills
-  as inventory candidates, not a guaranteed current compile target.
+  locations also exist. Duplicate names do not merge. (Corrected 2026-10-20, see
+  below: `.codex/skills` is a live root, not legacy.)
 - [Hooks](https://learn.chatgpt.com/docs/hooks): PreToolUse and SessionStart exist.
   Non-managed hooks require review/trust of the exact definition hash; changed
   definitions become untrusted. Tool inputs have tool_name and tool_input.
@@ -158,9 +158,8 @@ snippets; the proxy refused direct fetches) and openai/codex at a309f92
 owner's machine had 0.153.4 on 2026-10-11.
 
 - Plugin-bundled hooks (`hooks/hooks.json` in the plugin root, or the manifest
-  `hooks` entry) run only after the user reviews and trusts them. Codex sets
-  `PLUGIN_ROOT` and `PLUGIN_DATA`, plus `CLAUDE_PLUGIN_ROOT` and
-  `CLAUDE_PLUGIN_DATA` for compatibility.
+  `hooks` entry) run only after the user reviews and trusts them. (Which plugin
+  variables apply where is corrected for 0.163.0 below.)
 - `[features] hooks` is stable and on by default. `codex_hooks` is a deprecated
   alias, and `plugin_hooks` is a **removed** compatibility flag, ignored if set.
   Sources disagree on which release made hooks default-on (0.124 vs 0.145).
@@ -219,3 +218,62 @@ throwaway config. These facts supersede the "documented" entries above.
   The same entry in user config removes it. Single-skill disables need user scope.
 - **verified**: `[mcp_servers.<id>]` in a trusted project's config is listed and
   enabled by `codex mcp list`.
+
+### Codex CLI 0.163.0, corrections (2026-10-20)
+
+Two earlier statements in this file were wrong for 0.163.0. Both are **verified**
+on Codex 0.163.0 (2026-10-20):
+
+- `.codex/skills` is a live skill root, not a legacy one. Skills load from
+  `$CODEX_HOME/skills`, `~/.agents/skills`, `.agents/skills` and `.codex/skills`.
+  Kit still compiles project skills to `.agents/skills/<name>/`, and inventory
+  already reads `.codex/skills`.
+- `${PLUGIN_ROOT}` and `${PLUGIN_DATA}` are substituted in an Agent Plugin's MCP
+  stdio config, whose `cwd` must be `./`, `${PLUGIN_ROOT}` or `${PLUGIN_DATA}`.
+  Plugin hook commands get `${CLAUDE_PLUGIN_ROOT}` instead. Earlier text said
+  Codex sets all four variables everywhere.
+
+## Cursor (documented only, 2026-10-20)
+
+No Cursor CLI is installed in the build container, so **nothing about Cursor is
+verified**: `src/kitctl/harness.py` records version "unknown (no installed CLI)",
+every fact is **documented**, and every effect Kit compiles for Cursor carries an
+`unverified` gap. Sources, all read 2026-10-20: a clone of
+[cursor/plugins](https://github.com/cursor/plugins) at `29fa938`, which holds
+`schemas/plugin.schema.json`, `schemas/marketplace.schema.json` and about ninety
+plugins; and the project files Trail-code 0.23.0 wrote when run in a sandbox repo
+(`.cursor/mcp.json`, `.cursor/rules/trail.mdc`, `.cursor/hooks.json`), which is vendor
+evidence for the project-file locations. cursor.com's docs could not be fetched that day,
+so anything attributed to them below is recalled, not re-read.
+
+| Fact | Kit's use | Evidence | What the source shows |
+|---|---|---|---|
+| `mcp_project_file` | `.cursor/mcp.json` → `mcpServers.<id>` = `{command, args, env}` or `{url, headers}` | documented | Trail-code wrote this project file. The clone's 89 plugin `mcp.json` files use the same server objects under `mcpServers`, and 87 add a `type` key (`http` 86, `stdio` 1). Kit writes the documented form, without `type`. |
+| `mcp_env_reference` | env and header values are `${env:NAME}` | documented | Recalled from Cursor's MCP docs (interpolation in `command`, `args`, `env`, `url`, `headers`), not re-read. The clone's plugin files write `${NAME}`, for example xero's `env` and hunter's `X-API-Key`. The project-file syntax is therefore unconfirmed. Kit writes references only, never values. |
+| `instruction_file` | `.cursor/rules/kit-<loadout>.mdc`, frontmatter `description` and `alwaysApply: true` | documented | Trail-code wrote `.cursor/rules/trail.mdc` with this frontmatter. Four `rules/*.mdc` files in the clone (`cursor-team-kit`, `create-plugin`, `shopify-store`) use exactly that frontmatter. |
+| `hooks_project_file` | `.cursor/hooks.json` → `{"version": 1, "hooks": {"<event>": [{"command", "matcher"?, "loop_limit"?}]}}` | documented | The shape and the events `afterFileEdit`, `afterAgentResponse`, `subagentStop` and `stop` come from the clone's `advisor`, `continual-learning` and `ralph-loop` hooks. Those are plugin hooks. Trail-code wrote this project file, with `postToolUse` (and a `matcher`), `afterMCPExecution` and `sessionEnd`. No `timeout` key appears anywhere. |
+| `plugin_hooks` | plugin `hook_provides` slots count | documented | Plugins ship `hooks/hooks.json`, with commands using `${CURSOR_PLUGIN_ROOT}`. |
+| `plugin_enable`, `plugin_disable` | `manual-step` / `unsupported` gaps | documented (absence) | Plugins are installed from the Cursor marketplace. No project file that enables or disables one is documented, and the clone has only plugin-side manifests. |
+| `marketplace_file`, `marketplace_sha_pin` | `manual-step` gap | documented (absence) | A marketplace is `.cursor-plugin/marketplace.json` inside its own repo (`schemas/marketplace.schema.json`). No project file registers one, and no commit pin is documented. |
+| `skill_dir` | `.cursor/skills/<name>/` (Kit does not copy skill directories on any harness yet; the engine reports it) | documented | [cursor/cookbook](https://github.com/cursor/cookbook) at `6733ef8`, `hooks/README.md`: `update-skills-on-stop.mjs` maintains `.cursor/skills/*/SKILL.md`. |
+| `skill_disable` | `unsupported` gap | documented (absence) | No per-skill switch is documented. |
+| `hooks_trust_required` | `trust-required` gap on every Cursor hook | documented | cursor/cookbook `6733ef8` `hooks/README.md`: "Trusted workspaces automatically load project hooks from `.cursor/hooks.json`." |
+| `project_trust_required` | `unverified` gap, including a loadout that writes only the rule file | unknown | No source says whether Cursor gates the other `.cursor/` files on workspace trust. Kit claims no trust step, flags that as unverified, and the first sandbox probe has to settle it. |
+
+Hook mapping. Kit hook primitives use Claude-style events. Kit maps `Stop` to
+`stop`, and `PostToolUse` whose matcher lists only edit tools (`Edit`, `Write`,
+`MultiEdit`, `NotebookEdit`, `apply_patch`) to `afterFileEdit`. It drops that
+matcher, because the event already means a file edit. Every other event or
+matcher (`PreToolUse`, `SessionStart`, `UserPromptSubmit`, a `PostToolUse` on
+`Bash`) is an `unsupported` gap, and the managed rule file gets a soft rule. A
+hook `timeout` is not written; that is an `unverified` gap.
+
+Instructions. The rule file needs its frontmatter at the top, but a marked block
+is appended to the end of a file. So Kit owns the whole generated file (format
+`file` in the ledger), as design.md describes for whole generated files. `off`
+deletes the file when Kit created it, and eject leaves it in place. The file has
+no Kit markers, so eject has nothing to strip. An existing file at that path is
+never taken over (`unmanaged` conflict), and an edited one is drift.
+
+Inventory reads `.cursor/mcp.json` and `.cursor/hooks.json` in project roots, and
+`~/.cursor/` in an explicit home root, with the same redaction as Claude and Codex.

@@ -31,7 +31,8 @@ and `external`.
   identity. The map keys are `id` (a plugin id such as `name@market`, or a
   marketplace name), `skill` (a native skill name such as
   `anthropic-skills:brand-guidelines`), `manifest` and `path`. When it is
-  omitted, the primitive supports both harnesses.
+  omitted, the primitive supports every harness (`claude`, `codex` and, since
+  2026-10-20, `cursor`).
 - `source` holds provenance. It can contain `git` and `sha` (`git` requires a
   full 40-hex sha), plus `tag`, `path`, `url`, `license` and `retrieved`.
 - `provides` lists the slots this primitive fills, for example
@@ -83,8 +84,8 @@ Version 1 allows `name`, `description`, `extends`, `skills`, `mcp`, `hooks` and
 | `slots` | `{slot: ref}`: the declared single provider |
 | `disable` | list of refs of any kind |
 | `requires`, `optional` | tool refs; `doctor` checks them, and Kit never installs tools |
-| `setup` | `[{run: [...], when: file-exists:PATH, outputs: [...], harness: any\|claude\|codex}]` |
-| `instructions` | text for the managed `CLAUDE.md` / `AGENTS.md` block |
+| `setup` | `[{run: [...], when: file-exists:PATH, outputs: [...], harness: any\|claude\|codex\|cursor}]` |
+| `instructions` | text for the managed `CLAUDE.md` / `AGENTS.md` block, or the generated Cursor rule file `.cursor/rules/kit-<loadout>.mdc` |
 | `profiles` | `{name: {description, skills, mcp, hooks, plugins, marketplaces, requires, optional, setup, instructions_append}}` |
 
 A profile is addressed as `loadout:profile`. Each field present in a profile

@@ -233,6 +233,7 @@
   ],
   "instructions": {
     "target": "AGENTS.md",
+    "format": "markdown-block",
     "marker": "kit:brand-studio",
     "layers": [
       "brand-studio",

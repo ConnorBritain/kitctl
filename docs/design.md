@@ -67,7 +67,10 @@ unchanged bytes where possible and track only insertions actually made.
 Claude: user/project settings, project .mcp.json, user/local MCP in .claude.json,
 skills, plugin enablement/marketplaces, and managed CLAUDE.md block.
 Codex: layered config.toml, hooks.json, .agents/skills, plugin manifests/marketplaces,
-and AGENTS.md block. See harness-reference.md for dated sources and caveats.
+and AGENTS.md block.
+Cursor (documented only): .cursor/mcp.json, .cursor/hooks.json and a generated
+.cursor/rules/kit-<loadout>.mdc rule file; plugins, marketplaces and skills are gaps.
+See harness-reference.md for dated sources and caveats.
 
 Feature detection is tied to installed harness versions and sandbox probes;
 current online docs can describe features absent from local CLI versions. Never

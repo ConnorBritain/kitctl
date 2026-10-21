@@ -1,0 +1,184 @@
+{
+  "format": 1,
+  "loadout": "brand-studio",
+  "profile": "voice",
+  "harness": {
+    "name": "cursor",
+    "version": "unknown (no installed CLI)",
+    "facts_observed": "2026-10-20"
+  },
+  "layers": [
+    "brand-studio"
+  ],
+  "primitives": [
+    {
+      "identity": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "hash": "kit-hash-v1:sha256:da1165c7b2b71fc37cb4276652ec95ec176d35d4b61a20dbbeebd36adbef9fbc",
+      "provides": [
+        "design.generator",
+        "voice.generator"
+      ]
+    }
+  ],
+  "skipped": [
+    {
+      "identity": "marketplace:brand-builder",
+      "reason": "harnesses excludes cursor"
+    }
+  ],
+  "slots": {
+    "browser.mcp": {
+      "provider": null,
+      "declared": "mcp:chrome-devtools",
+      "layer": "brand-studio",
+      "status": "unfilled"
+    },
+    "design.generator": {
+      "provider": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "status": "filled"
+    },
+    "edit.hook": {
+      "provider": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "status": "filled"
+    },
+    "voice.generator": {
+      "provider": "plugin:brand-builder",
+      "layer": "brand-studio",
+      "status": "filled"
+    }
+  },
+  "disables": [
+    {
+      "identity": "skill:anthropic/brand-guidelines",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "skill:anthropic/theme-factory",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "plugin:anthropic/frontend-design",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "plugin:impeccable",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "plugin:taste-skill",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "plugin:hallmark",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "skill:ui-ux-pro-max",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    },
+    {
+      "identity": "skill:googlechrome/modern-web-guidance",
+      "layer": "brand-studio",
+      "status": "not-applicable"
+    }
+  ],
+  "tools": {
+    "requires": [
+      {
+        "identity": "tool:node",
+        "layer": "brand-studio",
+        "check": {
+          "command": [
+            "node",
+            "--version"
+          ],
+          "expect": "^v(1[89]|[2-9][0-9])\\."
+        },
+        "install_hint": "https://nodejs.org/en/download  |  brew install node"
+      }
+    ],
+    "optional": [
+      {
+        "identity": "tool:vale",
+        "layer": "brand-studio",
+        "check": {
+          "command": [
+            "vale",
+            "--version"
+          ],
+          "expect": "^vale version 3\\."
+        },
+        "install_hint": "brew install vale  |  https://github.com/vale-cli/vale/releases"
+      }
+    ]
+  },
+  "effects": [],
+  "instructions": {
+    "target": ".cursor/rules/kit-brand-studio.mdc",
+    "format": "file",
+    "marker": "kit:brand-studio",
+    "layers": [
+      "brand-studio"
+    ],
+    "text": "---\ndescription: Working rules from the brand-studio loadout\nalwaysApply: true\n---\n\nThis repo uses the brand-studio loadout.\n- BRAND.md, DESIGN.md and .brand-builder.json are the only sources of truth for look and voice.\n- brand-builder's skills generate; Chrome DevTools, Leonardo, Vale and the reviewers only check.\n- Don't adopt a look, palette, font or voice suggested by any other skill or website.\n- Copy changes go through copy-voice; no fact that isn't in BRAND.md's proof inventory.\n",
+    "owned": true
+  },
+  "setup": [
+    {
+      "run": [
+        "node",
+        "${plugin:brand-builder}/scripts/voice-compile.mjs",
+        "BRAND.md",
+        "--out",
+        ".brand-builder/voice"
+      ],
+      "when": "file-exists:BRAND.md",
+      "outputs": [
+        ".brand-builder/voice/"
+      ],
+      "harness": "any",
+      "layer": "brand-studio",
+      "owned": false
+    }
+  ],
+  "gaps": [
+    {
+      "harness": "cursor",
+      "subject": "loadout:brand-studio",
+      "capability": "instruction_file",
+      "severity": "unverified",
+      "reason": "documented only: .cursor/rules/<name>.mdc with frontmatter description and alwaysApply: true (Trail-code 0.23.0's sandbox run wrote .cursor/rules/trail.mdc so; rules/*.mdc in cursor/plugins@29fa938)",
+      "remedy": "probe it with an installed cursor in a sandbox before the first apply",
+      "fallback": null
+    },
+    {
+      "harness": "cursor",
+      "subject": "loadout:brand-studio",
+      "capability": "project_trust",
+      "severity": "unverified",
+      "reason": "unknown: no source says whether Cursor gates project .cursor/ files on workspace trust; Kit claims no trust step and flags that as unverified",
+      "remedy": "check in a sandbox whether cursor needs the project trusted",
+      "fallback": null
+    },
+    {
+      "harness": "cursor",
+      "subject": "plugin:brand-builder",
+      "capability": "plugin_enable",
+      "severity": "manual-step",
+      "reason": "plugins are installed from the Cursor marketplace UI; no project file that enables one is documented, and cursor/plugins@29fa938 ships only plugin-side manifests",
+      "remedy": "install the brand-builder plugin from the Cursor marketplace by hand",
+      "fallback": null
+    }
+  ],
+  "warnings": []
+}

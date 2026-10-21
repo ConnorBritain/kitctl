@@ -19,7 +19,10 @@ from typing import Any
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-HARNESSES = ("claude", "codex")
+HARNESSES = ("claude", "codex", "cursor")
+# What a project or brief gets when it names no harnesses; adding a harness must not
+# widen existing plans.
+DEFAULT_HARNESSES = ("claude", "codex")
 KINDS = ("skill", "mcp", "hook", "plugin", "marketplace", "tool")
 KIND_DIRS = {
     "skill": "skills",

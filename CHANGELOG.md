@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Cursor: project skills go to `.cursor/skills/<name>/` and doctor sees them there; every Cursor hook carries a `trust-required` gap (trusted workspaces load project hooks); a loadout that writes only the `.mdc` rule still gets the unverified trust gap. Source: cursor/cookbook@6733ef8.
+
+- Cursor is a third harness (`--harness cursor`, `harnesses: [cursor]` in kit.yaml).
+  It writes `.cursor/mcp.json` with `${env:NAME}` references, maps `Stop` and
+  edit-only `PostToolUse` hooks to `.cursor/hooks.json` (`stop`, `afterFileEdit`),
+  and generates the instruction block as a whole `.cursor/rules/kit-<loadout>.mdc`
+  rule file (`alwaysApply: true`), which `off` removes and eject keeps. Plugins,
+  marketplaces, disables and other hook events are gaps with remedies and
+  soft rules. Every Cursor fact is documented only, from Cursor's docs and
+  cursor/plugins@29fa938, so each Cursor effect also carries an `unverified` gap.
+  Inventory and doctor read `.cursor/mcp.json` and `.cursor/hooks.json`. kit.yaml and
+  forge briefs still default to `[claude, codex]`. `validate` now resolves for all
+  three harnesses. The resolve `instructions` object gains `format`
+  (`markdown-block` or `file`).
+- Fix: `resolve` (and so `validate`) no longer crashes on an `external` MCP primitive
+  with no `command` or `url`. It reports an `mcp_external` manual-step gap instead.
+- Docs: two Codex 0.163.0 corrections. `.codex/skills` is a live skill root, and
+  `${PLUGIN_ROOT}`/`${PLUGIN_DATA}` apply to Agent Plugin MCP stdio config, while hook
+  commands get `${CLAUDE_PLUGIN_ROOT}`.
 - Warehouse model, schema version 2 (version 1 loadouts still read): primitive kinds
   skill, mcp, hook, plugin, marketplace, tool; slots, disables, profiles, setup,
   instructions, tool requirements. See docs/model.md.
