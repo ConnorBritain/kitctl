@@ -54,12 +54,14 @@ uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
 ```
 
 `use`, `off`, `plan`, `apply`, `status` and `eject` manage a project's native
-config through an ownership ledger. Until live apply is authorized, they write only
-inside `$KITCTL_SANDBOX` (see [apply](docs/apply.md)):
+config through an ownership ledger. They write inside `$KITCTL_SANDBOX`, or in a
+real repository only with `--live` and that repository's committed opt-in (see
+[apply](docs/apply.md#live-apply)):
 
 ```sh
 export KITCTL_SANDBOX=/tmp/kit-sandbox
 uv run kitctl use brand-studio --repo /tmp/kit-sandbox/site --dry-run
+uv run kitctl use brand-studio --repo path/to/repo --live --yes  # after the opt-in
 ```
 
 `resolve` prints the effective native config a loadout would produce and every

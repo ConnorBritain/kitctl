@@ -60,9 +60,8 @@ that ships inside a plugin.
   base-path feature)
 - [ ] **Managed block placement.** Put it in the root `AGENTS.md`/`CLAUDE.md`
   (applies repo-wide), or in `apps/marketing/AGENTS.md`/`CLAUDE.md`?
-- [ ] **Authorize a live apply.** kitctl refuses to write outside
-  `$KITCTL_SANDBOX` until a reviewed change adds an explicit opt-in. Say whether
-  you want that change made.
+- [x] **Authorize a live apply.** Authorized 2026-10-21, as a per-repository
+  opt-in ([apply.md](apply.md#live-apply)).
 
 ## 5. After a real apply (only you can do these; Kit never writes trust)
 

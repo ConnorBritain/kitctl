@@ -76,6 +76,12 @@ def main(argv: list[str] | None = None) -> int:
         if writes:
             sub.add_argument("--yes", action="store_true", help="Write without asking.")
             sub.add_argument("--dry-run", action="store_true", help="Show the plan only.")
+            sub.add_argument(
+                "--live",
+                action="store_true",
+                help="Write to a real repo (outside KITCTL_SANDBOX). Needs a committed kit.yaml "
+                "with `live: true`, a clean tree and a non-default branch.",
+            )
 
     project(
         commands.add_parser("plan", help="Show the diff kit.yaml would produce; reads only."), False
@@ -313,7 +319,7 @@ def _project_command(args: argparse.Namespace) -> int:
                     "markers; re-run with --yes"
                 )
                 return 0 if args.dry_run else 1
-            for target in engine.eject(repo):
+            for target in engine.eject(repo, args.live):
                 print(f"ejected {target}")
             return 0
         recovered = False
@@ -321,8 +327,7 @@ def _project_command(args: argparse.Namespace) -> int:
             if args.dry_run or not args.yes:
                 print("an apply was interrupted; re-run with --yes to recover it first")
                 return 1
-            engine.check_sandbox(repo)
-            recovered = engine.recover(repo)
+            recovered = engine.recover(repo, args.live)
         intent = engine.read_intent(repo)
         if args.command == "use":
             intent = engine.with_loadout(intent, args.target)
@@ -335,7 +340,7 @@ def _project_command(args: argparse.Namespace) -> int:
         if not args.yes:
             print("Nothing written; re-run with --yes to apply.", file=sys.stderr)
             return 1
-        written = engine.apply_plan(plan)
+        written = engine.apply_plan(plan, args.live)
         if recovered:
             print("recovered an interrupted apply")
         print(f"wrote {len(written)} files" if written else "already up to date")

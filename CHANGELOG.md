@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Live apply, owner-authorized: outside `$KITCTL_SANDBOX`, `use`, `off`, `apply`
+  and `eject` write only with `--live`, a committed `kit.yaml` that says
+  `live: true`, no uncommitted tracked changes and a named branch other than
+  main, master and `origin/HEAD`. Recovery of an interrupted apply may run on
+  uncommitted files only when its journal names every one. Each unmet condition
+  is named; git runs without inherited `GIT_*` variables. `kit.yaml` accepts the
+  `live` key and keeps CRLF line endings. A no-op apply writes nothing and needs
+  no permission. See docs/apply.md#live-apply.
 - Cursor: project skills go to `.cursor/skills/<name>/` and doctor sees them there; every Cursor hook carries a `trust-required` gap (trusted workspaces load project hooks); a loadout that writes only the `.mdc` rule still gets the unverified trust gap. Source: cursor/cookbook@6733ef8.
 
 - Cursor is a third harness (`--harness cursor`, `harnesses: [cursor]` in kit.yaml).
