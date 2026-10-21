@@ -124,7 +124,14 @@ def write_warnings(repo: Path) -> list[str]:
 
 
 def check_write_allowed(repo: Path) -> None:
-    """When $KITCTL_SANDBOX is set, every write stays inside it (tests, CI, a first try)."""
+    """When $KITCTL_SANDBOX is set, every write stays inside it (tests, CI, a first try).
+
+    Kit's own state is checked too: a symlinked .kit/ or .kit/preimages would carry the
+    preimages, journal and lock somewhere else, sandbox or not.
+    """
+    for rel in (STATE, PREIMAGES):
+        if (repo / rel).is_symlink():
+            raise EngineError(f"{rel} is a symlink; Kit keeps its state in the project only")
     sandbox = os.environ.get(SANDBOX_ENV)
     if not sandbox:
         return

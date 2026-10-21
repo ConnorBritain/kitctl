@@ -1,6 +1,7 @@
 """Writes in a real repository: anywhere, after the plan and a confirmation; git state warns."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -11,6 +12,11 @@ from kitctl.cli import main
 
 WAREHOUSE = Path(__file__).parent / "fixtures" / "warehouse"
 INTENT = "schema_version: 1\nloadouts: []\nharnesses:\n  - claude\n  - codex\n"
+
+
+def clean_env() -> dict[str, str]:
+    """No inherited GIT_DIR and friends: under a hook they would aim at the developer's repo."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
 def git(repo: Path, *args: str) -> str:
@@ -32,6 +38,7 @@ def git(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         check=True,
+        env=clean_env(),
     )
     return done.stdout.strip()
 
@@ -102,7 +109,9 @@ def test_git_state_warns_and_never_blocks(real_repo: Path) -> None:
 
 def test_the_remote_default_branch_warns(real_repo: Path, tmp_path: Path) -> None:
     remote = tmp_path / "remote.git"
-    subprocess.run(["git", "init", "-q", "--bare", "-b", "trunk", str(remote)], check=True)
+    subprocess.run(
+        ["git", "init", "-q", "--bare", "-b", "trunk", str(remote)], check=True, env=clean_env()
+    )
     git(real_repo, "branch", "-q", "-m", "feature", "trunk")
     git(real_repo, "remote", "add", "origin", str(remote))
     git(real_repo, "push", "-q", "origin", "trunk")
@@ -158,6 +167,7 @@ def test_cli_asks_before_writing(
     args = ["--repo", str(real_repo), "--warehouse", str(WAREHOUSE)]
     baseline = tree(real_repo)
     assert main(["use", "brand-studio", *args, "--dry-run"]) == 0
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     assert main(["use", "brand-studio", *args]) == 1  # not a terminal and no --yes
     assert "re-run with --yes" in capsys.readouterr().err
     assert tree(real_repo) == baseline
@@ -187,3 +197,15 @@ def test_cli_warns_and_accepts_the_old_live_flag(
     assert main(["use", "brand-studio", *args, "--yes", "--live"]) == 0
     err = capsys.readouterr().err
     assert "--live is no longer needed" in err and "warning: on main" in err
+
+
+def test_a_symlinked_state_directory_is_refused(real_repo: Path, tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        (real_repo / ".kit").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+    with pytest.raises(engine.EngineError, match="symlink"):
+        engine.apply_plan(plan_for(real_repo))
+    assert list(outside.iterdir()) == []

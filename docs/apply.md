@@ -70,7 +70,7 @@ the installed Claude Code plugin's directory (skipped when the plugin is not ins
 Steps run in the project with no shell; their outputs belong to the tool, so `off` leaves
 them. `kitctl use <loadout>` again re-runs them; `apply` only lists them.
 
-Every write takes `--dry-run`. Without `--yes`, nothing is written.
+Every write takes `--dry-run`. Without a terminal and without `--yes`, nothing is written.
 
 ## Generators
 

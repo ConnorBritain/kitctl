@@ -28,7 +28,7 @@
   uncommitted files only when its journal names every one. Each unmet condition
   is named; git runs without inherited `GIT_*` variables. `kit.yaml` accepts the
   `live` key and keeps CRLF line endings. A no-op apply writes nothing and needs
-  no permission. See docs/apply.md#live-apply.
+  no permission. Superseded by the entry above; see docs/apply.md#writing.
 - Cursor: project skills go to `.cursor/skills/<name>/` and doctor sees them there; every Cursor hook carries a `trust-required` gap (trusted workspaces load project hooks); a loadout that writes only the `.mdc` rule still gets the unverified trust gap. Source: cursor/cookbook@6733ef8.
 
 - Cursor is a third harness (`--harness cursor`, `harnesses: [cursor]` in kit.yaml).
