@@ -39,6 +39,24 @@ JOURNAL = f"{STATE}/journal.json"
 LOCKFILE = f"{STATE}/lock"
 PREIMAGES = f"{STATE}/preimages"
 LEDGER_VERSION = 1
+# User scope (the root is home): intent and ledger live in .kit/, never loose in ~.
+USER_INTENT = f"{STATE}/kit.yaml"
+USER_LEDGER = f"{STATE}/kit.lock"
+
+
+def is_user_scope(repo: Path) -> bool:
+    """Kit runs in user scope when the root is the home directory (`--user`)."""
+    return repo.resolve() == Path.home().resolve()
+
+
+def intent_path(repo: Path) -> str:
+    return USER_INTENT if is_user_scope(repo) else INTENT
+
+
+def ledger_path(repo: Path) -> str:
+    return USER_LEDGER if is_user_scope(repo) else LEDGER
+
+
 SANDBOX_ENV = "KITCTL_SANDBOX"
 JSON_TARGETS = {
     ".claude/settings.json",
@@ -108,6 +126,8 @@ def _git(repo: Path, *args: str, strip: bool = True) -> str | None:
 def write_warnings(repo: Path) -> list[str]:
     """What to know before Kit writes here. None of it blocks: `kitctl off` restores the
     original bytes from Kit's own preimages in .kit/, with or without git."""
+    if is_user_scope(repo):
+        return ["user scope: every session on this machine sees these changes"]
     if _git(repo, "rev-parse", "--is-inside-work-tree") != "true":
         return ["not a git repository: `kitctl off` is the undo (Kit keeps the original bytes)"]
     warnings = []
@@ -151,7 +171,7 @@ def _yaml() -> YAML:
 
 
 def read_intent(repo: Path) -> dict[str, Any]:
-    path = repo / INTENT
+    path = repo / intent_path(repo)
     if not path.exists():
         return {"schema_version": 1, "loadouts": [], "harnesses": list(DEFAULT_HARNESSES)}
     data = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8")) or {}
@@ -177,7 +197,7 @@ def read_intent(repo: Path) -> dict[str, Any]:
 
 def render_intent(repo: Path, intent: dict[str, Any]) -> bytes | None:
     """kit.yaml bytes for an intent, keeping comments of an existing file."""
-    path = repo / INTENT
+    path = repo / intent_path(repo)
     if not intent["loadouts"] and not path.exists():
         return None
     yaml = _yaml()
@@ -219,7 +239,7 @@ def empty_ledger() -> dict[str, Any]:
 
 
 def read_ledger(repo: Path) -> dict[str, Any]:
-    path = repo / LEDGER
+    path = repo / ledger_path(repo)
     if not path.exists():
         return empty_ledger()
     try:
@@ -302,14 +322,41 @@ def _expand_directories(
     return out
 
 
-def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
+def _user_targets() -> tuple[dict[str, str], dict[str, str]]:
+    """Prefix map for user scope: .claude/ and .codex/ move with CLAUDE_CONFIG_DIR and
+    CODEX_HOME, but only to a folder under home other than Kit's own .kit/. A bad value is
+    a problem only for the effects that would use it (prefix -> problem)."""
+    home = Path.home().resolve()
+    prefixes: dict[str, str] = {}
+    problems: dict[str, str] = {}
+    for prefix, env in ((".claude/", "CLAUDE_CONFIG_DIR"), (".codex/", "CODEX_HOME")):
+        value = os.environ.get(env)
+        if not value:
+            continue
+        try:
+            rel = Path(value).expanduser().resolve().relative_to(home).as_posix()
+        except ValueError:
+            problems[prefix] = f"{env}={value} is outside home; user scope writes only under home"
+            continue
+        if rel == "." or rel == STATE or rel.startswith(f"{STATE}/"):
+            problems[prefix] = f"{env}={value} must name a folder under home, not home or {STATE}/"
+            continue
+        prefixes[prefix] = f"{rel}/"
+    return prefixes, problems
+
+
+def desired_state(warehouse: Path, intent: dict[str, Any], user: bool = False) -> Desired:
     result = Desired()
+    prefixes: dict[str, str] = {}
+    problems: dict[str, str] = {}
+    if user:
+        prefixes, problems = _user_targets()
     for target in intent["loadouts"]:
         name, profile = split_target(target)
         owner = {"loadout": name, "profile": profile}
         for harness in intent["harnesses"]:
             try:
-                plan = resolve(warehouse, target, harness)
+                plan = resolve(warehouse, target, harness, scope="user" if user else "project")
             except ModelError as error:
                 raise EngineError(f"{target} ({harness}): {error}") from error
             effects = list(plan["effects"])
@@ -324,6 +371,13 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
                     }
                 )
             for effect in _expand_directories(warehouse, effects, result.conflicts):
+                bad = [p for prefix, p in problems.items() if effect["target"].startswith(prefix)]
+                if bad:
+                    result.conflicts.extend(c for c in bad if c not in result.conflicts)
+                    continue
+                for old, new in prefixes.items():
+                    if effect["target"].startswith(old):
+                        effect = {**effect, "target": new + effect["target"][len(old) :]}
                 if "${plugin:" in _canonical(effect["value"]):
                     result.conflicts.append(
                         f"{effect.get('source', effect['target'])} ({harness}): needs the "
@@ -460,7 +514,7 @@ class Doc:
                 return value if current is not MISSING and value in current else MISSING
             return current
         if self.fmt == "toml":
-            return formats.toml_get(self.doc, key)
+            return formats.toml_get(self.doc, key, value)
         if self.fmt == "file":
             # A whole file Kit just took back reads as absent, so an update re-inserts it.
             if self.before is None or self.cleared:
@@ -492,7 +546,7 @@ class Doc:
         if self.fmt == "json":
             formats.json_delete(self.doc, entry["key"], entry["value"], created)
         elif self.fmt == "toml":
-            formats.toml_delete(self.doc, entry["key"], created)
+            formats.toml_delete(self.doc, entry["key"], created, entry["value"])
         elif self.fmt == "file":
             self.text = ""  # empty: deleted below because Kit created it
             self.cleared = True
@@ -578,7 +632,7 @@ def make_plan(repo: Path, warehouse: Path, intent: dict[str, Any]) -> Plan:
     if (repo / JOURNAL).exists():
         raise EngineError("an earlier apply was interrupted; run `kitctl apply` to recover first")
     ledger = read_ledger(repo)
-    desired = desired_state(warehouse, intent)
+    desired = desired_state(warehouse, intent, is_user_scope(repo))
     conflicts = list(desired.conflicts)
     owned = {entry_id(e): e for e in ledger["entries"]}
     docs: dict[str, Doc] = {}
@@ -721,16 +775,17 @@ def make_plan(repo: Path, warehouse: Path, intent: dict[str, Any]) -> Plan:
         "created_files": sorted(created_files),
         "created_parents": created_parents,
         "created_dirs": sorted(created_dirs),
-        "kit_yaml_created": ledger.get("kit_yaml_created", not (repo / INTENT).exists()),
+        "kit_yaml_created": ledger.get("kit_yaml_created", not (repo / intent_path(repo)).exists()),
     }
-    lock_before = (repo / LEDGER).read_bytes() if (repo / LEDGER).exists() else None
-    intent_before = (repo / INTENT).read_bytes() if (repo / INTENT).exists() else None
+    ledger_rel, intent_rel = ledger_path(repo), intent_path(repo)
+    lock_before = (repo / ledger_rel).read_bytes() if (repo / ledger_rel).exists() else None
+    intent_before = (repo / intent_rel).read_bytes() if (repo / intent_rel).exists() else None
     if intent["loadouts"]:
-        files[LEDGER] = (lock_before, render_ledger(body, commit))
-        files[INTENT] = (intent_before, render_intent(repo, intent))
+        files[ledger_rel] = (lock_before, render_ledger(body, commit))
+        files[intent_rel] = (intent_before, render_intent(repo, intent))
     else:
-        files[LEDGER] = (lock_before, None)
-        files[INTENT] = (
+        files[ledger_rel] = (lock_before, None)
+        files[intent_rel] = (
             intent_before,
             None if body["kit_yaml_created"] else render_intent(repo, intent),
         )
@@ -834,6 +889,25 @@ def _commit_files(repo: Path, journal: dict[str, Any]) -> None:
             os.replace(staged, path)
 
 
+def _clear_state(repo: Path) -> None:
+    """Drop Kit's state. A project's .kit/ is Kit's alone; ~/.kit may hold other tools'
+    files, so in user scope only Kit's own files go, and the folder only if it is empty."""
+    state = repo / STATE
+    if not is_user_scope(repo):
+        shutil.rmtree(state, ignore_errors=True)
+        return
+    for rel in (JOURNAL, LOCKFILE, USER_INTENT, USER_LEDGER):
+        with contextlib.suppress(FileNotFoundError):
+            (repo / rel).unlink()
+    shutil.rmtree(repo / PREIMAGES, ignore_errors=True)
+    ignore = state / ".gitignore"
+    with contextlib.suppress(OSError):
+        if ignore.read_text(encoding="utf-8") == "*\n":
+            ignore.unlink()
+    with contextlib.suppress(OSError):
+        state.rmdir()
+
+
 def _finish(repo: Path, journal: dict[str, Any]) -> None:
     for directory in journal["remove_dirs"]:
         with contextlib.suppress(OSError):
@@ -843,7 +917,7 @@ def _finish(repo: Path, journal: dict[str, Any]) -> None:
             _preimage_path(repo, target).unlink()
     (repo / JOURNAL).unlink()
     if journal["clear_state"]:
-        shutil.rmtree(repo / STATE, ignore_errors=True)
+        _clear_state(repo)
 
 
 def recover(repo: Path) -> bool:
@@ -915,7 +989,9 @@ def apply_plan(plan: Plan) -> list[str]:
             "files": files,
             "remove_dirs": plan.remove_dirs,
             "drop_preimages": [t for t in changes if t not in still],
-            "clear_state": not plan.intent["loadouts"],
+            # In user scope the intent lives in .kit/; keep the folder if Kit did not create it.
+            "clear_state": not plan.intent["loadouts"]
+            and not (is_user_scope(repo) and not plan.ledger.get("kit_yaml_created", True)),
         }
         _write_atomic(repo / JOURNAL, json.dumps(journal, indent=2).encode())
         _commit_files(repo, journal)
@@ -978,7 +1054,9 @@ def status(repo: Path, warehouse: Path) -> dict[str, Any]:
     for target in intent["loadouts"]:
         for harness in intent["harnesses"]:
             try:
-                plan = resolve(warehouse, target, harness)
+                plan = resolve(
+                    warehouse, target, harness, scope="user" if is_user_scope(repo) else "project"
+                )
             except ModelError as error:
                 report.setdefault("errors", []).append(f"{target} ({harness}): {error}")
                 continue
@@ -1020,9 +1098,9 @@ def eject(repo: Path) -> list[str]:
                     text = formats.strip_markers(text, name)
             _write_atomic(path, text.encode("utf-8"))
             touched.append(target)
-        for name in (LEDGER, INTENT):
+        for name in (ledger_path(repo), intent_path(repo)):
             if (repo / name).exists():
                 (repo / name).unlink()
                 touched.append(name)
-    shutil.rmtree(repo / STATE, ignore_errors=True)
+    _clear_state(repo)
     return touched

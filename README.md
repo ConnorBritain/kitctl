@@ -70,6 +70,7 @@ config through an ownership ledger. They show the plan and ask before writing
 uv run kitctl use brand-studio --repo path/to/repo --dry-run   # the plan only
 uv run kitctl use brand-studio --repo path/to/repo             # the plan, then [y/N]
 uv run kitctl off brand-studio --repo path/to/repo             # the undo
+uv run kitctl use core --user                                   # ~/.claude, ~/.codex, ~/.agents
 KITCTL_SANDBOX=/tmp/kit-sandbox uv run kitctl ...               # confine writes to one directory
 ```
 

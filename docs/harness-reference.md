@@ -215,7 +215,8 @@ throwaway config. These facts supersede the "documented" entries above.
   "installed, enabled 0.3.1". No separate `codex plugin add` is needed.
 - **verified**: `[[skills.config]] name = "…" enabled = false` in a trusted
   project's config is **ignored**: `codex debug prompt-input` still lists the skill.
-  The same entry in user config removes it. Single-skill disables need user scope.
+  The same entry in user config removes it. Single-skill disables need user scope, which
+  `kitctl use <loadout> --user` writes as owned `[[skills.config]]` tables.
 - **verified**: `[mcp_servers.<id>]` in a trusted project's config is listed and
   enabled by `codex mcp list`.
 

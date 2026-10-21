@@ -78,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
 
     def project(sub: argparse.ArgumentParser, writes: bool) -> None:
         sub.add_argument("--repo", type=Path, default=None, help="Project root (default: cwd).")
+        sub.add_argument(
+            "--user",
+            action="store_true",
+            help="User scope: ~/.claude, ~/.codex and ~/.agents instead of a project.",
+        )
         sub.add_argument("--warehouse", type=Path, help="Warehouse root (default: ~/kits).")
         sub.add_argument("--json", action="store_true", help="Print JSON.")
         if writes:
@@ -347,7 +352,10 @@ def _confirm(args: argparse.Namespace, question: str) -> bool:
 
 
 def _project_command(args: argparse.Namespace) -> int:
-    repo = (args.repo or Path.cwd()).resolve()
+    if args.user and args.repo is not None:
+        print("kitctl: --user and --repo name different roots; pass one", file=sys.stderr)
+        return 2
+    repo = (Path.home() if args.user else (args.repo or Path.cwd())).resolve()
     warehouse = warehouse_root(args.warehouse)
     if getattr(args, "live", False):
         print(
@@ -418,6 +426,9 @@ def _project_command(args: argparse.Namespace) -> int:
             print("recovered an interrupted apply")
         print(f"wrote {len(written)} files" if written else "already up to date")
         if args.command == "use" and plan.setup:
+            if engine.is_user_scope(repo):
+                print("setup steps run in projects; `kitctl use` in a repo runs them")
+                return 0
             return _run_setup(args, repo, plan.setup)
         return 0
     except engine.EngineError as error:

@@ -242,6 +242,19 @@ def _effect(
     }
 
 
+def _claude_mcp_add(server: str, value: dict[str, Any]) -> str:
+    """The `claude mcp add --scope user` command for one server; env references stay names."""
+    parts = ["claude", "mcp", "add", "--scope", "user"]
+    if value.get("type") == "http":
+        parts += ["--transport", "http", server, value["url"]]
+        for name, ref in value.get("headers", {}).items():
+            parts += ["--header", f"{name}: {ref}"]
+        return shlex.join(parts)
+    for name, ref in value.get("env", {}).items():
+        parts += ["-e", f"{name}={ref}"]
+    return shlex.join([*parts, server, "--", value["command"], *value["args"]])
+
+
 def _launch(primitive: Primitive) -> tuple[str, list[str]]:
     data = primitive.data
     command = str(data["command"])
@@ -282,9 +295,10 @@ def _github_slug(url: str) -> str | None:
 class Compiler:
     """Turns the effective primitive set into native effects and gaps for one harness."""
 
-    def __init__(self, harness: Harness, profile: str | None) -> None:
+    def __init__(self, harness: Harness, profile: str | None, scope: str = "project") -> None:
         self.harness = harness
         self.profile = profile
+        self.scope = scope  # "user": targets are relative to home (docs/apply.md#user-scope)
         self.effects: list[dict[str, Any]] = []
         self.gaps: list[dict[str, Any]] = []
         self.soft_rules: list[str] = []
@@ -533,6 +547,18 @@ class Compiler:
                 command, args = _launch(primitive)
                 value = {"type": "stdio", "command": command, "args": args}
                 value["env"] = {k: f"${{{v['env']}}}" for k, v in sorted(env.items())}
+            if self.scope == "user":
+                # User MCP servers live in ~/.claude.json, a state file Claude Code rewrites
+                # all the time; owner decision (2026-10-21): a remedy, not a write.
+                self.gap(
+                    primitive.identity,
+                    "mcp_user_file",
+                    "manual-step",
+                    "Claude Code keeps user MCP servers in ~/.claude.json, which Kit "
+                    "does not write",
+                    remedy=_claude_mcp_add(server, value),
+                )
+                return
             self.add(
                 ".mcp.json",
                 "json",
@@ -678,6 +704,15 @@ class Compiler:
 
     def skill(self, primitive: Primitive, layer: str) -> None:
         name = primitive.name.rsplit("/", 1)[-1]
+        if self.scope == "user" and self.name == "cursor":
+            self.gap(
+                primitive.identity,
+                "skill_dir",
+                "unsupported",
+                "Cursor documents no user skills folder",
+                remedy="install the skill in Cursor by hand",
+            )
+            return
         target = {"claude": ".claude/skills", "codex": ".agents/skills", "cursor": ".cursor/skills"}
         self.add(
             f"{target[self.name]}/{name}/",
@@ -776,13 +811,25 @@ class Compiler:
                     remedy="turn the skill off in Cursor by hand, or disable the whole plugin",
                     soft_rule=soft,
                 )
+            elif self.scope == "user":
+                native = self.native(primitive, "skill") or primitive.name.rsplit("/", 1)[-1]
+                self.add(
+                    ".codex/config.toml",
+                    "toml",
+                    "skills.config/-",
+                    {"name": native, "enabled": False},
+                    subject,
+                    layer,
+                    "skill_disable",
+                )
             else:
                 self.gap(
                     subject,
                     "skill_disable",
                     "unsupported",
                     f"{fact.note}; a project loadout cannot disable a single skill",
-                    remedy="disable it in user config by hand, or disable the whole plugin",
+                    remedy="apply a loadout that disables it with `kitctl use <loadout> --user`, "
+                    "or disable the whole plugin",
                     soft_rule=soft,
                 )
             return
@@ -800,8 +847,10 @@ def resolve(
     target: str,
     harness: str,
     observed: set[str] | None = None,
+    scope: str = "project",
 ) -> dict[str, Any]:
-    """Resolve target ("loadout" or "loadout:profile") for one harness."""
+    """Resolve target ("loadout" or "loadout:profile") for one harness, in a project or in
+    the user's home (scope "user": targets relative to home)."""
     if harness not in HARNESSES:
         raise ValueError(f"unknown harness {harness!r}")
     name, profile = split_target(target)
@@ -839,7 +888,7 @@ def resolve(
         raise ModelError(sorted(set(problems)))
 
     facts = HARNESS_FACTS[harness]
-    compiler = Compiler(facts, profile)
+    compiler = Compiler(facts, profile, scope)
 
     # Active identities and the layer that enabled them.
     active: dict[str, str] = {}
@@ -1026,7 +1075,9 @@ def resolve(
     writes = bool(compiler.effects) or (
         harness == "cursor" and bool(merged.instructions or compiler.soft_rules)
     )
-    if trust.supported and compiler.effects:
+    if scope == "user":
+        pass  # user config needs no project trust
+    elif trust.supported and compiler.effects:
         compiler.gap(
             f"loadout:{name}",
             "project_trust",
@@ -1049,7 +1100,15 @@ def resolve(
         rules = "\n".join(f"- {rule}" for rule in sorted(set(compiler.soft_rules)))
         text = f"{text}\n\nSoft rules (the harness cannot enforce these):\n{rules}".strip()
     instructions = None
-    if text and harness == "cursor":
+    if text and harness == "cursor" and scope == "user":
+        compiler.gap(
+            f"loadout:{name}",
+            "instruction_file",
+            "unsupported",
+            "Cursor's user rules live in its settings, not in a file Kit can own",
+            remedy="paste the loadout's instructions into Cursor's User Rules by hand",
+        )
+    elif text and harness == "cursor":
         # A rule file needs its frontmatter first, so Kit owns the whole generated file
         # (format "file") instead of appending a marked block; `text` is the full file.
         instructions = {
@@ -1063,7 +1122,12 @@ def resolve(
         compiler.unverified(f"loadout:{name}", "instruction_file")
     elif text:
         instructions = {
-            "target": "CLAUDE.md" if harness == "claude" else "AGENTS.md",
+            "target": {
+                ("claude", "project"): "CLAUDE.md",
+                ("claude", "user"): ".claude/CLAUDE.md",
+                ("codex", "project"): "AGENTS.md",
+                ("codex", "user"): ".codex/AGENTS.md",
+            }[(harness, scope)],
             "format": "markdown-block",
             "marker": f"kit:{name}",
             "layers": [layer for layer, _ in merged.instructions],

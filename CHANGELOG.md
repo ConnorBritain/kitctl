@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
+  `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
+  `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME` within home. Intent and ledger live in `~/.kit/`.
+  Claude user MCP servers are a gap with the exact `claude mcp add --scope user` command
+  (owner decision: Kit does not write `~/.claude.json`); Cursor user rules are a gap.
+  Codex single-skill disables become owned `[[skills.config]]` tables (TOML arrays of
+  tables are now owned one table at a time, like JSON `/-` entries).
 - Skill directories: a warehouse skill with a directory and a `SKILL.md` is copied into
   `.claude/skills/`, `.agents/skills/` (and `.cursor/skills/`), one owned whole file per
   asset; updates follow the warehouse and `off` removes them. Symlinks, non-UTF-8 assets

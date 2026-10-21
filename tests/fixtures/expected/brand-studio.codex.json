@@ -322,7 +322,7 @@
       "capability": "skill_disable",
       "severity": "unsupported",
       "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
-      "remedy": "disable it in user config by hand, or disable the whole plugin",
+      "remedy": "apply a loadout that disables it with `kitctl use <loadout> --user`, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     },
     {
@@ -331,7 +331,7 @@
       "capability": "skill_disable",
       "severity": "unsupported",
       "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
-      "remedy": "disable it in user config by hand, or disable the whole plugin",
+      "remedy": "apply a loadout that disables it with `kitctl use <loadout> --user`, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     },
     {
@@ -340,7 +340,7 @@
       "capability": "skill_disable",
       "severity": "unsupported",
       "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
-      "remedy": "disable it in user config by hand, or disable the whole plugin",
+      "remedy": "apply a loadout that disables it with `kitctl use <loadout> --user`, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     },
     {
@@ -349,7 +349,7 @@
       "capability": "skill_disable",
       "severity": "unsupported",
       "reason": "[[skills.config]] in a trusted project config is ignored; the same entry in user config removes the skill; a project loadout cannot disable a single skill",
-      "remedy": "disable it in user config by hand, or disable the whole plugin",
+      "remedy": "apply a loadout that disables it with `kitctl use <loadout> --user`, or disable the whole plugin",
       "fallback": "managed instruction block (soft rule)"
     }
   ],

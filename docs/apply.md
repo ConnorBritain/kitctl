@@ -55,7 +55,33 @@ kitctl status                                   # every owned entry should read 
 kitctl off gestalt-flow                         # the undo; restores the original bytes
 ```
 
-Kit writes project files only; user-scope (`~/`) targets stay gaps with remedies.
+## User scope
+
+`--user` (the same as `--repo ~`) applies a loadout to your home instead of a project:
+every session on the machine sees it, so Kit warns before writing. Intent and ledger live
+in `~/.kit/kit.yaml` and `~/.kit/kit.lock`; `kitctl off <loadout> --user` restores the
+original bytes like it does in a project.
+
+| Project target | User target |
+|---|---|
+| `.claude/settings.json`, `.claude/skills/<n>/` | `~/.claude/…` (or `$CLAUDE_CONFIG_DIR/…`) |
+| `CLAUDE.md` block | `~/.claude/CLAUDE.md` |
+| `.codex/config.toml`, `.codex/hooks.json` | `~/.codex/…` (or `$CODEX_HOME/…`) |
+| `AGENTS.md` block | `~/.codex/AGENTS.md` |
+| `.agents/skills/<n>/`, `.cursor/mcp.json`, `.cursor/hooks.json` | `~/.agents/…`, `~/.cursor/…` |
+| `.mcp.json` (Claude MCP) | a gap whose remedy is the `claude mcp add --scope user …` command: user servers live in `~/.claude.json`, which Claude Code rewrites all the time, so Kit does not own it |
+| `.cursor/rules/kit-<loadout>.mdc`, `.cursor/skills/` | gaps: Cursor keeps user rules in its settings |
+
+Codex reads single-skill disables only from user config, so in user scope a disabled skill
+becomes one `[[skills.config]]` table (`name`, `enabled = false`) Kit owns by value; your
+own tables stay. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` move the targets, but only within
+home; one pointing elsewhere is a conflict. Setup steps are listed, not run: they belong to
+projects. Project trust gaps do not apply.
+
+Kit does not write through symlinks, so a `~/.claude` or `~/.codex` linked from a dotfiles
+repository (stow and the like) is refused; point `CLAUDE_CONFIG_DIR` / `CODEX_HOME` at the
+real folder under home instead. Kit removes only its own files from `~/.kit/`, and a
+comment inside a `[[skills.config]]` table Kit owns blocks `off` until you move it.
 
 **Skills.** A skill primitive with a directory (`primitives/skills/<name>/` with a
 `SKILL.md`) is copied to `.claude/skills/<name>/` and `.agents/skills/<name>/`
