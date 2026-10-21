@@ -7,6 +7,17 @@
 Kit writes: loadouts apply to a project or to your home with a plan, a confirmation and a
 byte-for-byte undo.
 
+- Worker agents: a new `agent` primitive kind (`primitives/agents/<name>.yaml` plus a
+  `<name>/` folder with the author's ready `claude.md` and/or `codex.toml`) and a loadout
+  `agents:` list (profiles can narrow it). Kit copies `claude.md` to
+  `.claude/agents/<name>.md` and `codex.toml` to `.codex/agents/<name>.toml` as owned
+  whole files, in a project or (`--user`) under `~/.claude` and `$CODEX_HOME`; it never
+  converts between formats. Codex project agents carry an `unverified` gap and Cursor an
+  `unsupported` one. `validate` reports a missing folder or harness file, TOML that does
+  not parse, a missing Codex `name`/`description`/`developer_instructions`, and a
+  `claude.md` frontmatter name that differs from the file name. Inventory lists
+  `.claude/agents/*.md` and `.codex/agents/*.toml`; `init` makes `primitives/agents/`;
+  forge and `vendor` refuse agents.
 - User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
   `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
   `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring

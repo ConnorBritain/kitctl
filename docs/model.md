@@ -5,8 +5,8 @@ is for review: no generator writes native config from it yet.
 
 ## Identities and paths
 
-A reference is `kind:name`, where kind is `skill`, `mcp`, `hook`, `plugin`,
-`marketplace` or `tool`. A name is a lowercase slug with at most one namespace
+A reference is `kind:name`, where kind is `skill`, `agent`, `mcp`, `hook`,
+`plugin`, `marketplace` or `tool`. A name is a lowercase slug with at most one namespace
 segment (`anthropic/brand-guidelines`). References containing `..`, a
 backslash, or an absolute path are `path-traversal` errors. So are files that
 resolve outside the warehouse through a symlink.
@@ -14,6 +14,7 @@ resolve outside the warehouse through a symlink.
 | Kind | File | Assets |
 |---|---|---|
 | skill | `primitives/skills/<name>.yaml` | `primitives/skills/<name>/` (needs `SKILL.md`) |
+| agent | `primitives/agents/<name>.yaml` | `primitives/agents/<name>/` (`claude.md`, `codex.toml`) |
 | mcp | `primitives/mcp/<name>.yaml` | – |
 | hook | `primitives/hooks/<name>.yaml` | optional `<name>/` |
 | plugin | `primitives/plugins/<name>.yaml` | optional `<name>/` |
@@ -56,6 +57,7 @@ Kind-specific fields:
 | hook | `event`, `matcher`, `command` (list), `timeout`, `blocking`, `trust` (only `requires-user-review`), `unless_capability`, `heartbeat` |
 | plugin | `marketplace` (ref), `plugin_name`, `version`, `skills`, `hook_provides`, `heartbeat` |
 | skill | `plugin` (the containing plugin, for external skills) |
+| agent | none beyond the common fields; the agent itself is in its asset files |
 | tool | `check {command, expect}`, `install_hint` |
 
 - Credentials: `env` and `headers` map a name to `{env: VAR}`. Any literal value
@@ -72,6 +74,24 @@ Kind-specific fields:
 - `unless_capability`: the primitive is a fallback, active only on harnesses
   that lack the named capability (for example `plugin_hooks`).
 
+### Agents
+
+An agent is a worker definition the harness can hand a job to: a Claude Code subagent and
+a Codex custom agent. Its asset directory holds one file per harness, already rendered by
+the author; Kit copies the file and never converts one format into the other.
+
+| Harness | Asset | Must contain | Written to |
+|---|---|---|---|
+| claude | `claude.md` | YAML frontmatter with `name` (the target file name) and `description` | `.claude/agents/<name>.md` |
+| codex | `codex.toml` | string `name`, `description` and `developer_instructions` | `.codex/agents/<name>.toml` |
+| cursor | – | – | a gap: no Cursor agent location is verified |
+
+Each harness listed in `harnesses` needs its file (`harnesses: [claude]` needs only
+`claude.md`). `<name>` is the last segment of a namespaced name, so `acme/reviewer`
+lands as `reviewer.md`. A missing directory or file, TOML that does not parse, a missing
+Codex key, or a frontmatter `name` that differs from the file name is an `agent` problem
+in `kitctl validate`. Forge does not propose agents and `kitctl vendor` does not copy them.
+
 ## Loadouts
 
 Version 1 allows `name`, `description`, `extends`, `skills`, `mcp`, `hooks` and
@@ -82,11 +102,12 @@ Version 1 allows `name`, `description`, `extends`, `skills`, `mcp`, `hooks` and
 | `marketplaces` | list of marketplace refs |
 | `mcp` | `{server-id: {primitive: mcp:NAME, enabled_tools?, disabled_tools?}}` |
 | `slots` | `{slot: ref}`: the declared single provider |
+| `agents` | list of agent refs |
 | `disable` | list of refs of any kind |
 | `requires`, `optional` | tool refs; `doctor` checks them, and Kit never installs tools |
 | `setup` | `[{run: [...], when: file-exists:PATH, outputs: [...], harness: any\|claude\|codex\|cursor}]` |
 | `instructions` | text for the managed `CLAUDE.md` / `AGENTS.md` block, or the generated Cursor rule file `.cursor/rules/kit-<loadout>.mdc` |
-| `profiles` | `{name: {description, skills, mcp, hooks, plugins, marketplaces, requires, optional, setup, instructions_append}}` |
+| `profiles` | `{name: {description, skills, agents, mcp, hooks, plugins, marketplaces, requires, optional, setup, instructions_append}}` |
 
 A profile is addressed as `loadout:profile`. Each field present in a profile
 replaces that field, and its entries must already be in the loadout: a profile

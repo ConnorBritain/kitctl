@@ -62,6 +62,17 @@ CLAUDE = Harness(
             True, "verified", "`claude mcp add --scope project` writes .mcp.json"
         ),
         "skill_dir": Fact(True, "documented", "project skills live in .claude/skills/<name>/"),
+        "agent_file": Fact(
+            True,
+            "documented",
+            "custom subagents are Markdown files with name and description frontmatter in "
+            ".claude/agents/<name>.md (project) and ~/.claude/agents/<name>.md (user)",
+        ),
+        "agent_user_file": Fact(
+            True,
+            "documented",
+            "user subagents live in ~/.claude/agents/<name>.md (CLAUDE_CONFIG_DIR/agents/)",
+        ),
         "project_trust_required": Fact(
             False, "verified", "project settings load without Kit trust"
         ),
@@ -105,6 +116,19 @@ CODEX = Harness(
             True, "verified", "[mcp_servers.<id>] in a trusted project config is listed and enabled"
         ),
         "skill_dir": Fact(True, "documented", "repository skills live in .agents/skills/<name>/"),
+        "agent_file": Fact(
+            True,
+            "documented",
+            "project-scope .codex/agents/<name>.toml is assumed by analogy with the user folder; "
+            "no run has shown Codex loading it",
+        ),
+        "agent_user_file": Fact(
+            True,
+            "verified",
+            "custom agents in $CODEX_HOME/agents/<name>.toml with string name, description and "
+            "developer_instructions load in Codex 0.163 (checked by a sibling project's "
+            "installer, not in Kit's own sandbox)",
+        ),
         "project_trust_required": Fact(
             True,
             "verified",
@@ -189,6 +213,11 @@ CURSOR = Harness(
             "documented",
             f"project skills live in .cursor/skills/<name>/ ({COOKBOOK_SOURCE} hooks/README.md: "
             "update-skills-on-stop.mjs maintains .cursor/skills/*/SKILL.md)",
+        ),
+        "agent_file": Fact(
+            False,
+            "documented",
+            "no file location for Cursor custom agents is documented in the sources above",
         ),
         "hooks_trust_required": Fact(
             True,

@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,7 @@ HARNESSES = ("claude", "codex", "cursor")
 # What a project or brief gets when it names no harnesses; adding a harness must not
 # widen existing plans.
 DEFAULT_HARNESSES = ("claude", "codex")
-KINDS = ("skill", "mcp", "hook", "plugin", "marketplace", "tool")
+KINDS = ("skill", "mcp", "hook", "plugin", "marketplace", "tool", "agent")
 KIND_DIRS = {
     "skill": "skills",
     "mcp": "mcp",
@@ -31,7 +32,12 @@ KIND_DIRS = {
     "plugin": "plugins",
     "marketplace": "marketplaces",
     "tool": "tools",
+    "agent": "agents",
 }
+# An agent's asset directory holds one file per harness, already rendered by its author;
+# Kit copies the file and never converts between formats.
+AGENT_FILES = {"claude": "claude.md", "codex": "codex.toml"}
+CODEX_AGENT_KEYS = ("name", "description", "developer_instructions")
 HASH_SCHEME = "kit-hash-v1"
 SCHEMA_VERSIONS = (1, 2)
 CURRENT_SCHEMA = 2
@@ -84,6 +90,7 @@ KIND_FIELDS = {
     "plugin": {"marketplace", "plugin_name", "version", "skills", "hook_provides", "heartbeat"},
     "marketplace": set(),
     "tool": {"check", "install_hint"},
+    "agent": set(),
 }
 V1_PRIMITIVE = {"schema_version", "kind", "name", "description", "tags", "harnesses", "source"}
 HARNESS_KEYS = {"id", "skill", "manifest", "path"}
@@ -107,9 +114,11 @@ V2_LOADOUT = V1_LOADOUT | {
     "setup",
     "instructions",
     "profiles",
+    "agents",
 }
 LIST_FIELDS = {
     "skills": "skill",
+    "agents": "agent",
     "hooks": "hook",
     "plugins": "plugin",
     "marketplaces": "marketplace",
@@ -127,6 +136,7 @@ PROFILE_FIELDS = {
     "optional",
     "setup",
     "instructions_append",
+    "agents",
 }
 SETUP_KEYS = {"run", "when", "outputs", "harness"}
 MCP_ENTRY_KEYS = {"primitive", "enabled_tools", "disabled_tools"}
@@ -195,6 +205,7 @@ class Loadout:
     description: str = ""
     extends: list[str] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
+    agents: list[str] = field(default_factory=list)
     hooks: list[str] = field(default_factory=list)
     plugins: list[str] = field(default_factory=list)
     marketplaces: list[str] = field(default_factory=list)
@@ -463,6 +474,94 @@ def _check_kind(kind: str, data: dict[str, Any], where: str, problems: list[Prob
             problems.append(Problem(f"{where}.install_hint", "type", "expected a string"))
 
 
+def frontmatter(text: str) -> dict[str, Any]:
+    """The YAML frontmatter of a Markdown file; {"_error": ...} when it does not parse."""
+    match = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    if not match:
+        return {}
+    try:
+        data = YAML(typ="safe", pure=True).load(match.group(1))
+    except Exception:  # malformed frontmatter is a fact, not a crash
+        return {"_error": "unparseable frontmatter"}
+    return data if isinstance(data, dict) else {}
+
+
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _check_agent(
+    name: str,
+    harnesses: dict[str, dict[str, str]],
+    assets: Path,
+    where: str,
+    problems: list[Problem],
+) -> None:
+    """An agent's asset directory has a ready file for each harness it lists."""
+    if not assets.is_dir() or assets.is_symlink():
+        problems.append(
+            Problem(where, "agent", f"no agent directory {assets.name}/ next to the primitive")
+        )
+        return
+    tail = name.rsplit("/", 1)[-1]
+    for harness, filename in AGENT_FILES.items():
+        if harness not in harnesses:
+            continue
+        path = assets / filename
+        if path.is_symlink() or not path.is_file():
+            problems.append(
+                Problem(
+                    where, "agent", f"{harness} is listed but {assets.name}/{filename} is missing"
+                )
+            )
+            continue
+        text = _read_text(path)
+        if text is None:
+            problems.append(Problem(where, "agent", f"{assets.name}/{filename} is not UTF-8 text"))
+            continue
+        if harness == "codex":
+            try:
+                data = tomllib.loads(text)
+            except tomllib.TOMLDecodeError as error:
+                problems.append(
+                    Problem(where, "agent", f"{assets.name}/{filename} is not valid TOML: {error}")
+                )
+                continue
+            for key in CODEX_AGENT_KEYS:
+                if not isinstance(data.get(key), str) or not data[key].strip():
+                    problems.append(
+                        Problem(
+                            where,
+                            "agent",
+                            f"{assets.name}/{filename} needs a string {key} (Codex ignores the "
+                            "agent without it)",
+                        )
+                    )
+        else:
+            front = frontmatter(text)
+            if "_error" in front or not front:
+                problems.append(
+                    Problem(where, "agent", f"{assets.name}/{filename} has no YAML frontmatter")
+                )
+                continue
+            if front.get("name") != tail:
+                problems.append(
+                    Problem(
+                        where,
+                        "agent",
+                        f"{assets.name}/{filename}: frontmatter name must be {tail!r}, the file "
+                        "name Kit writes",
+                    )
+                )
+            if not isinstance(front.get("description"), str) or not front["description"].strip():
+                problems.append(
+                    Problem(where, "agent", f"{assets.name}/{filename} needs a description")
+                )
+
+
 def _canonical(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
@@ -562,6 +661,8 @@ def parse_primitive(root: Path, ref: str) -> Primitive:
     assets = path.with_suffix("")
     if kind == "skill" and assets.is_dir() and not (assets / "SKILL.md").is_file():
         problems.append(Problem(where, "skill", "skill directory has no SKILL.md"))
+    if kind == "agent" and not data.get("external"):
+        _check_agent(name, harnesses, assets, where, problems)
     digest = content_hash(data, assets)
     if "hash" in data and data["hash"] != digest:
         problems.append(Problem(f"{where}.hash", "hash", "recorded hash does not match content"))

@@ -27,7 +27,7 @@ from kitctl.model import (
 )
 
 RESOLVE_FORMAT = 1
-SET_FIELDS = ("skills", "hooks", "plugins", "marketplaces")
+SET_FIELDS = ("skills", "hooks", "plugins", "marketplaces", "agents")
 TOOL_FIELDS = ("requires", "optional")
 PACKAGE_RUNNERS = {"npx": ["-y"], "bunx": [], "pnpx": [], "uvx": []}
 # Claude-style tool names that only edit files; a PostToolUse hook limited to these maps
@@ -726,6 +726,35 @@ class Compiler:
         if self.name == "cursor":
             self.unverified(primitive.identity, "skill_dir")
 
+    def agent(self, primitive: Primitive, layer: str) -> None:
+        """A worker agent: the author's ready file for this harness, copied whole."""
+        tail = primitive.name.rsplit("/", 1)[-1]
+        if self.name == "cursor":
+            self.gap(
+                primitive.identity,
+                "agent_file",
+                "unsupported",
+                self.fact("agent_file").note,
+                remedy="set the agent up in Cursor by hand, or drop cursor from its harnesses",
+            )
+            return
+        asset = {"claude": "claude.md", "codex": "codex.toml"}[self.name]
+        target = {"claude": f".claude/agents/{tail}.md", "codex": f".codex/agents/{tail}.toml"}
+        fact = "agent_user_file" if self.scope == "user" else "agent_file"
+        self.add(
+            target[self.name],
+            "asset",
+            asset,
+            primitive.content_hash,
+            primitive.identity,
+            layer,
+            fact,
+        )
+        if self.name == "codex":
+            # Claude's agent folder is documented like its skill folder; Codex project agents
+            # are the one location nobody has seen loaded (docs/harness-reference.md).
+            self.unverified(primitive.identity, fact)
+
     def disable(self, primitive: Primitive, layer: str, loaded: dict[str, Primitive]) -> None:
         subject = primitive.identity
         soft = f"Do not use {primitive.name} in this repository."
@@ -1067,6 +1096,9 @@ def resolve(
     for ref, layer in merged.sets["skills"].items():
         if ref in active and not loaded[ref].data.get("external"):
             compiler.skill(loaded[ref], layer)
+    for ref, layer in merged.sets["agents"].items():
+        if ref in active and not loaded[ref].data.get("external"):
+            compiler.agent(loaded[ref], layer)
     for primitive, layer in external_disables:
         compiler.disable(primitive, layer, loaded)
     trust = facts.facts["project_trust_required"]

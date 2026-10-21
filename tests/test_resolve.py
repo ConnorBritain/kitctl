@@ -311,6 +311,7 @@ def test_validate_reports_every_broken_case(cases: Path) -> None:
         "path-traversal",
         "credential-literal",
         "unknown-field",
+        "agent",
     } <= found
 
 

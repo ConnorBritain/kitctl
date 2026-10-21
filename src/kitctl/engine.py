@@ -29,7 +29,7 @@ from ruamel.yaml import YAML
 
 from kitctl import __version__, formats
 from kitctl.formats import MISSING, FormatError, Style, detect_style
-from kitctl.model import DEFAULT_HARNESSES, HARNESSES, ModelError, is_traversal
+from kitctl.model import DEFAULT_HARNESSES, HARNESSES, KIND_DIRS, ModelError, is_traversal
 from kitctl.resolve import resolve, split_target
 
 INTENT = "kit.yaml"
@@ -281,25 +281,53 @@ class Desired:
     conflicts: list[str] = field(default_factory=list)
 
 
+# What a placeholder effect copies from a primitive's asset directory. "directory": the whole
+# directory, which must hold the marker file; "asset": the one file named by the effect's key.
+DIRECTORY_MARKERS = {"skill": "SKILL.md"}
+
+
+def _asset_files(
+    warehouse: Path, effect: dict[str, Any], conflicts: list[str]
+) -> list[tuple[Path, str, str]] | None:
+    """(source file, target, relative name) for each file a placeholder copies, or None."""
+    kind, _, name = effect["source"].partition(":")
+    root = warehouse / "primitives" / KIND_DIRS[kind] / PurePosixPath(name)
+    if effect["format"] == "asset":
+        path = root / effect["key"]
+        if not root.is_dir() or not (path.is_file() or path.is_symlink()):
+            conflicts.append(f"{effect['source']}: no {name}/{effect['key']} in the warehouse")
+            return None
+        return [(path, effect["target"], effect["key"])]
+    marker = DIRECTORY_MARKERS.get(kind)
+    if not root.is_dir() or (marker and not (root / marker).is_file()):
+        conflicts.append(
+            f"{effect['source']}: no {kind} directory with a {marker} in the warehouse"
+            if marker
+            else f"{effect['source']}: no {kind} directory in the warehouse"
+        )
+        return None
+    return [
+        (
+            path,
+            f"{effect['target']}{path.relative_to(root).as_posix()}",
+            path.relative_to(root).as_posix(),
+        )
+        for path in sorted(p for p in root.rglob("*") if p.is_file() or p.is_symlink())
+    ]
+
+
 def _expand_directories(
     warehouse: Path, effects: list[dict[str, Any]], conflicts: list[str]
 ) -> list[dict[str, Any]]:
-    """A skill directory becomes one whole file per asset, each owned by path like a generated
-    rule file, so `off` removes exactly what Kit copied and drift shows per file."""
+    """A skill directory or an agent's harness file becomes one whole file per asset, each
+    owned by path like a generated rule file, so `off` removes exactly what Kit copied and
+    drift shows per file."""
     out = []
     for effect in effects:
-        if effect["format"] != "directory":
+        if effect["format"] not in ("directory", "asset"):
             out.append(effect)
             continue
-        kind, _, name = effect["source"].partition(":")
-        root = warehouse / "primitives" / f"{kind}s" / PurePosixPath(name)
-        if not root.is_dir() or not (root / "SKILL.md").is_file():
-            conflicts.append(
-                f"{effect['source']}: no skill directory with a SKILL.md in the warehouse"
-            )
-            continue
-        for path in sorted(p for p in root.rglob("*") if p.is_file() or p.is_symlink()):
-            rel = path.relative_to(root).as_posix()
+        for path, target, rel in _asset_files(warehouse, effect, conflicts) or []:
             if path.is_symlink():
                 conflicts.append(f"{effect['source']}: {rel} is a symlink; Kit copies files only")
                 continue
@@ -313,7 +341,7 @@ def _expand_directories(
             out.append(
                 {
                     **effect,
-                    "target": f"{effect['target']}{rel}",
+                    "target": target,
                     "format": "file",
                     "key": effect["source"],
                     "value": text,

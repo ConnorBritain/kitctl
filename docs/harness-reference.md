@@ -234,6 +234,18 @@ on Codex 0.163.0 (2026-10-20):
   Plugin hook commands get `${CLAUDE_PLUGIN_ROOT}` instead. Earlier text said
   Codex sets all four variables everywhere.
 
+## Worker agents (`agent_file`, 2026-10-21)
+
+Kit copies an agent author's ready file per harness; it never renders one format into the
+other. The facts in `src/kitctl/harness.py`:
+
+| Harness | Fact | Target | Evidence | What it rests on |
+|---|---|---|---|---|
+| Claude Code | `agent_file`, `agent_user_file` | `.claude/agents/<name>.md`, `~/.claude/agents/<name>.md` | documented | [Subagents](https://code.claude.com/docs/en/sub-agents): Markdown with `name` and `description` frontmatter, project and user folders. Like `skill_dir`, not flagged as a gap. |
+| Codex | `agent_user_file` | `$CODEX_HOME/agents/<name>.toml` | verified | String `name`, `description` and `developer_instructions` load in Codex 0.163; checked by a sibling project's installer (Gestalt, Cairn), not in Kit's own sandbox. Codex ignores a file missing `developer_instructions`. |
+| Codex | `agent_file` | `.codex/agents/<name>.toml` | documented | Assumed by analogy with the user folder (and with `.codex/skills`); no run has shown Codex loading it, so every project agent carries an `unverified` gap. |
+| Cursor | `agent_file` | – | documented (absence) | No agent file location in the sources below; an `unsupported` gap with a by-hand remedy. |
+
 ## Cursor (documented only, 2026-10-20)
 
 No Cursor CLI is installed in the build container, so **nothing about Cursor is

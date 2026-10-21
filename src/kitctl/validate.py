@@ -20,7 +20,16 @@ from kitctl.resolve import resolve
 
 def _loadout_refs(loadout: Loadout) -> list[tuple[str, str]]:
     refs: list[tuple[str, str]] = []
-    for key in ("skills", "hooks", "plugins", "marketplaces", "requires", "optional", "disable"):
+    for key in (
+        "skills",
+        "agents",
+        "hooks",
+        "plugins",
+        "marketplaces",
+        "requires",
+        "optional",
+        "disable",
+    ):
         refs += [(ref, f"{loadout.path}.{key}") for ref in getattr(loadout, key)]
     refs += [(e["primitive"], f"{loadout.path}.mcp.{s}") for s, e in loadout.mcp.items()]
     refs += [(ref, f"{loadout.path}.slots.{slot}") for slot, ref in loadout.slots.items()]
