@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `kitctl init [PATH]` creates a starter warehouse (default `KIT_WAREHOUSE` or `~/kits`):
+  `loadouts/starter.yaml` (an instruction block and a `tool:git` check), empty
+  `primitives/<kind>/` folders, a README, and `git init` unless `--no-git`. It refuses a
+  non-empty directory.
 - Writes for everyone (owner decision, 2026-10-21): `use`, `off`, `apply` and `eject` write
   wherever they are pointed after showing the plan and asking `[y/N]` on a terminal
   (`--yes` skips it; with no terminal and no `--yes`, nothing is written). The undo is

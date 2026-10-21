@@ -37,6 +37,14 @@ The npm package is a thin launcher around the bundled Python wheel from the same
 release. It uses `uvx` with that local wheel; it does not require a PyPI release,
 run install scripts, or ship a `kit` binary. uv manages Python if needed.
 
+Start a warehouse of your own (`~/kits`, or `KIT_WAREHOUSE`), with a `starter` loadout
+that only adds an instruction block:
+
+```sh
+uv run kitctl init
+uv run kitctl validate
+```
+
 Loadouts (read-only; nothing is written):
 
 ```sh

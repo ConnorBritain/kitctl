@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from kitctl import __version__, engine
+from kitctl import __version__, engine, starter
 from kitctl import forge as forging
 from kitctl import scout as scouting
 from kitctl.doctor import doctor
@@ -34,6 +34,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Repository or home directory to inspect; repeatable. Defaults to current directory.",
     )
     scan.add_argument("--json", action="store_true", help="Print metadata and hashes as JSON.")
+    start = commands.add_parser("init", help="Create a starter warehouse (default: ~/kits).")
+    start.add_argument(
+        "path", nargs="?", type=Path, help="Where to create it (default: KIT_WAREHOUSE or ~/kits)."
+    )
+    start.add_argument("--no-git", action="store_true", help="Do not run git init.")
     check = commands.add_parser("validate", help="Check warehouse documents and loadouts.")
     check.add_argument(
         "path", nargs="?", type=Path, help="Warehouse root (default: KIT_WAREHOUSE or ~/kits)."
@@ -145,6 +150,8 @@ def main(argv: list[str] | None = None) -> int:
         return _project_command(args)
     if args.command == "doctor":
         return _doctor(args)
+    if args.command == "init":
+        return _init(args)
     if args.command == "validate":
         return _validate(args)
     if args.command == "resolve":
@@ -281,6 +288,22 @@ def _print_plan(plan: engine.Plan, as_json: bool) -> None:
         print(f"setup (not run; outputs are not Kit-owned): {' '.join(step['run'])}")
     for conflict in plan.conflicts:
         print(f"conflict: {conflict}", file=sys.stderr)
+
+
+def _init(args: argparse.Namespace) -> int:
+    root = warehouse_root(args.path)
+    try:
+        made = starter.init_warehouse(root, git=not args.no_git)
+    except starter.InitError as error:
+        print(f"kitctl: {error}", file=sys.stderr)
+        return 1
+    print(f"created a warehouse at {root}:")
+    for rel in made:
+        print(f"  {rel}")
+    default = warehouse_root(None)
+    hint = "" if root == default else f" (set KIT_WAREHOUSE={root} or pass --warehouse {root})"
+    print(f"next: kitctl validate {root}, then `kitctl use starter` in a repo{hint}")
+    return 0
 
 
 def _confirm(args: argparse.Namespace, question: str) -> bool:
