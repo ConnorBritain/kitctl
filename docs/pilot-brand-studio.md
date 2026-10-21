@@ -1,8 +1,9 @@
 # Pilot runbook: brand-studio
 
-Status, 2026-10-19: only a **dry run** has been done, and it wrote nothing.
-Applying the loadout for real is a separate decision for the owner. Until it is
-authorized, kitctl refuses to write anywhere outside `$KITCTL_SANDBOX`.
+Status, 2026-10-21: only a **dry run** has been done, and it wrote nothing.
+The owner has authorized live apply as a per-repository opt-in
+([apply.md](apply.md#live-apply)); without it, kitctl refuses to write anywhere
+outside `$KITCTL_SANDBOX`.
 
 The steps that need the owner are in [owner-checklist.md](owner-checklist.md).
 
@@ -87,21 +88,19 @@ enabled for the user. Without that root, disables are reported as
 heartbeat check reports "fired at …" once the hook has been trusted and a site
 file has been edited.
 
-## Apply and remove (only after authorization)
+## Apply and remove (live opt-in)
 
-As written, these commands are refused. Every write checks that the project
-resolves inside `$KITCTL_SANDBOX`, and that check is the authorization gate.
-Do not point `KITCTL_SANDBOX` at a directory containing a real repository to
-get past it. A live apply needs a separately reviewed change to kitctl that
-replaces the guard with an explicit, owner-approved opt-in. Until then, run
-the commands below against a sandbox copy of the pilot.
+Outside a sandbox these commands need `--live` and the pilot's own opt-in
+([apply.md](apply.md#live-apply)). Do not point `KITCTL_SANDBOX` at a real
+repository to get past it. Commit after each write, because the next one needs
+a clean tree.
 
 ```sh
-kitctl use brand-studio --repo <pilot> --yes      # writes, journaled, ledger in kit.lock
-kitctl status --repo <pilot>                      # each owned entry should be ok
-kitctl use brand-studio:audit --repo <pilot> --yes  # profile switch writes only the delta
-kitctl off brand-studio --repo <pilot> --yes      # restores the original bytes
-kitctl eject --repo <pilot> --yes                 # alternative: keep native files, drop Kit
+kitctl use brand-studio --repo <pilot> --live --yes      # journaled, ledger in kit.lock
+kitctl status --repo <pilot>                             # each owned entry should be ok
+kitctl use brand-studio:audit --repo <pilot> --live --yes  # writes only the delta
+kitctl off brand-studio --repo <pilot> --live --yes      # restores the original bytes
+kitctl eject --repo <pilot> --live --yes                 # or: keep native files, drop Kit
 ```
 
 `off` removes only brand-studio's entries. If those entries were edited
