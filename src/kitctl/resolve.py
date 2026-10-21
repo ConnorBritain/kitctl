@@ -27,7 +27,7 @@ from kitctl.model import (
 )
 
 RESOLVE_FORMAT = 1
-SET_FIELDS = ("skills", "hooks", "plugins", "marketplaces")
+SET_FIELDS = ("skills", "hooks", "plugins", "marketplaces", "agents")
 TOOL_FIELDS = ("requires", "optional")
 PACKAGE_RUNNERS = {"npx": ["-y"], "bunx": [], "pnpx": [], "uvx": []}
 # Claude-style tool names that only edit files; a PostToolUse hook limited to these maps
@@ -46,6 +46,8 @@ class Merged:
     disable: list[tuple[str, str]] = field(default_factory=list)
     setup: list[tuple[dict[str, Any], str]] = field(default_factory=list)
     instructions: list[tuple[str, str]] = field(default_factory=list)
+    # Listing budget: each number from the most specific layer (or profile) that sets it.
+    budget: dict[str, tuple[int, str]] = field(default_factory=dict)
 
 
 def split_target(target: str) -> tuple[str, str | None]:
@@ -134,6 +136,8 @@ def _merge(layers: list[Loadout], problems: list[Problem]) -> Merged:
                 merged.setup.append((step, layer.name))
         if layer.instructions.strip():
             merged.instructions.append((layer.name, layer.instructions.strip()))
+        for key, number in layer.budget.items():
+            merged.budget[key] = (number, layer.name)  # parents come first: the child wins
     for ref in merged.tools["optional"].copy():
         if ref in merged.tools["requires"]:
             del merged.tools["optional"][ref]
@@ -189,6 +193,23 @@ def _apply_profile(top: Loadout, profile: str, merged: Merged, problems: list[Pr
         merged.setup = [(step, top.name) for step in fields["setup"]]
     if fields.get("instructions_append", "").strip():
         merged.instructions.append((f"{top.name}:{profile}", fields["instructions_append"].strip()))
+    for key, number in fields.get("budget", {}).items():
+        merged.budget[key] = (number, f"{top.name}:{profile}")
+
+
+def effective(root: Path, target: str) -> Merged:
+    """The merged selections of target ("loadout" or "loadout:profile"), before compiling."""
+    name, profile = split_target(target)
+    if is_traversal(name):
+        raise ModelError([Problem(name, "path-traversal", f"reference escapes: {name!r}")])
+    layers = linearize(root, name)
+    problems: list[Problem] = []
+    merged = _merge(layers, problems)
+    if profile:
+        _apply_profile(layers[-1], profile, merged, problems)
+    if problems:
+        raise ModelError(sorted(set(problems)))
+    return merged
 
 
 def _load(root: Path, refs: set[str], problems: list[Problem]) -> dict[str, Primitive]:
@@ -726,6 +747,35 @@ class Compiler:
         if self.name == "cursor":
             self.unverified(primitive.identity, "skill_dir")
 
+    def agent(self, primitive: Primitive, layer: str) -> None:
+        """A worker agent: the author's ready file for this harness, copied whole."""
+        tail = primitive.name.rsplit("/", 1)[-1]
+        if self.name == "cursor":
+            self.gap(
+                primitive.identity,
+                "agent_file",
+                "unsupported",
+                self.fact("agent_file").note,
+                remedy="set the agent up in Cursor by hand, or drop cursor from its harnesses",
+            )
+            return
+        asset = {"claude": "claude.md", "codex": "codex.toml"}[self.name]
+        target = {"claude": f".claude/agents/{tail}.md", "codex": f".codex/agents/{tail}.toml"}
+        fact = "agent_user_file" if self.scope == "user" else "agent_file"
+        self.add(
+            target[self.name],
+            "asset",
+            asset,
+            primitive.content_hash,
+            primitive.identity,
+            layer,
+            fact,
+        )
+        if self.name == "codex":
+            # Claude's agent folder is documented like its skill folder; Codex project agents
+            # are the one location nobody has seen loaded (docs/harness-reference.md).
+            self.unverified(primitive.identity, fact)
+
     def disable(self, primitive: Primitive, layer: str, loaded: dict[str, Primitive]) -> None:
         subject = primitive.identity
         soft = f"Do not use {primitive.name} in this repository."
@@ -1067,6 +1117,9 @@ def resolve(
     for ref, layer in merged.sets["skills"].items():
         if ref in active and not loaded[ref].data.get("external"):
             compiler.skill(loaded[ref], layer)
+    for ref, layer in merged.sets["agents"].items():
+        if ref in active and not loaded[ref].data.get("external"):
+            compiler.agent(loaded[ref], layer)
     for primitive, layer in external_disables:
         compiler.disable(primitive, layer, loaded)
     trust = facts.facts["project_trust_required"]

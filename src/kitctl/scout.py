@@ -27,6 +27,7 @@ from kitctl.model import (
     NAME_RE,
     ModelError,
     content_hash,
+    frontmatter,
     is_traversal,
 )
 from kitctl.native import redact_url
@@ -202,15 +203,7 @@ def _evidence(root: Path, path: Path, line: int, text: str) -> dict[str, Any]:
     return {"file": path.relative_to(root).as_posix(), "line": line, "text": text.strip()[:160]}
 
 
-def _frontmatter(text: str) -> dict[str, Any]:
-    match = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
-    if not match:
-        return {}
-    try:
-        data = YAML(typ="safe", pure=True).load(match.group(1))
-    except Exception:  # malformed frontmatter is a fact, not a crash
-        return {"_error": "unparseable frontmatter"}
-    return data if isinstance(data, dict) else {}
+_frontmatter = frontmatter  # one frontmatter reader for scout, inventory and the model
 
 
 def facts(root: Path) -> dict[str, Any]:
@@ -427,6 +420,11 @@ def vendor(
     policy_file: Path | None = None,
 ) -> dict[str, Any]:
     """Copy one path from a quarantined clone into inbox/, or refuse."""
+    if kind == "agent":
+        raise ScoutError(
+            "agents are not vendored: render claude.md and codex.toml yourself into "
+            "primitives/agents/<name>/ (docs/model.md#agents)"
+        )
     clone, report = find_scouted(scouted_id, cache)
     if pin and not report["sha"].startswith(pin):
         raise ScoutError(f"pin {pin} does not match the quarantined commit {report['sha']}")

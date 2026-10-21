@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import os
+import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 
+from kitctl.model import frontmatter
 from kitctl.native import read_native
 
 CONFIG_PATHS = (
@@ -25,6 +27,7 @@ CONFIG_PATHS = (
     "kit.lock",
 )
 SKILL_PATHS = (".claude/skills", ".agents/skills", ".codex/skills", ".cursor/skills")
+AGENT_PATHS = ((".claude/agents", ".md"), (".codex/agents", ".toml"))
 
 
 @dataclass(frozen=True)
@@ -94,6 +97,39 @@ def _skill_hash(directory: Path, root: Path) -> str:
     return digest.hexdigest()
 
 
+def _agent_name(path: Path) -> str:
+    """The name an agent file declares (frontmatter or TOML `name`), else its file name."""
+    try:
+        text = path.read_bytes().decode("utf-8")
+        data = tomllib.loads(text) if path.suffix == ".toml" else frontmatter(text)
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return path.stem
+    name = data.get("name")
+    return name if isinstance(name, str) and name else path.stem
+
+
+def _agents(root: Path, entries: list[Entry], warnings: list[str]) -> None:
+    for relative, suffix in AGENT_PATHS:
+        directory = root / relative
+        try:
+            if directory.is_symlink() or any(
+                parent.is_symlink() for parent in directory.parents if parent != root
+            ):
+                warnings.append(f"Skipped linked agent directory: {directory}")
+                continue
+            if not directory.is_dir():
+                continue
+            for path in sorted(directory.glob(f"*{suffix}")):
+                if path.is_symlink():
+                    warnings.append(f"Skipped linked agent: {path}")
+                elif _safe_file(path, root):
+                    entries.append(
+                        Entry("agent", _agent_name(path), str(root), str(path), _file_hash(path))
+                    )
+        except OSError:
+            warnings.append(f"Cannot read: {directory}")
+
+
 def inventory(roots: list[Path]) -> Report:
     entries: list[Entry] = []
     warnings: list[str] = []
@@ -148,6 +184,7 @@ def inventory(roots: list[Path]) -> Report:
                             warnings.append(f"Cannot read complete skill: {skill}")
             except OSError:
                 warnings.append(f"Cannot read: {directory}")
+        _agents(root, entries, warnings)
     return {
         "schema_version": 2,
         "entries": [asdict(e) for e in entries],

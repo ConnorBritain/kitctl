@@ -462,3 +462,27 @@ def test_ledger_checks_survive_python_optimize(repo: Path) -> None:
     )
     done = subprocess.run([sys.executable, "-O", "-c", code, str(repo)], check=False)
     assert done.returncode == 0
+
+
+def test_eject_keeps_a_block_that_only_mentions_kitctl(repo: Path, tmp_path: Path) -> None:
+    """The starter's instructions name kitctl; that is text, not a dependency on Kit."""
+    from kitctl.starter import init_warehouse
+
+    warehouse = tmp_path / "kits"
+    init_warehouse(warehouse, git=False)
+    use(repo, "starter", warehouse)
+    assert "kitctl status" in (repo / "CLAUDE.md").read_text()
+    engine.eject(repo)
+    text = (repo / "CLAUDE.md").read_text()
+    assert "kitctl status" in text and "kit:begin" not in text
+    assert not (repo / "kit.lock").exists() and not (repo / ".kit").exists()
+
+
+def test_a_malformed_kit_yaml_is_an_error_not_a_crash(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (repo / "kit.yaml").write_bytes(b"loadouts: [\n")
+    with pytest.raises(engine.EngineError, match="not valid YAML"):
+        engine.read_intent(repo)
+    assert main(["status", "--repo", str(repo), "--warehouse", str(WAREHOUSE)]) != 0
+    assert "not valid YAML" in capsys.readouterr().err

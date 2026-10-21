@@ -16,9 +16,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from kitctl import engine
+from kitctl.cost import listing_cost, over_budget, strictest_budget
 from kitctl.inventory import inventory
 from kitctl.model import DEFAULT_HARNESSES, ModelError, Primitive, discover, parse_primitive
-from kitctl.resolve import resolve
+from kitctl.resolve import resolve, split_target
 
 Runner = Callable[[list[str]], tuple[int, str]]
 CHECK_TIMEOUT = 15
@@ -211,13 +213,16 @@ def doctor(
         "tools": [],
         "findings": findings,
     }
-    if target is None or not warehouse.is_dir():
+    active = _active_set(roots, target, harnesses, findings)
+    if (target is None and not any(active.values())) or not warehouse.is_dir():
         if target is not None:
             findings.append(_finding("error", "warehouse", str(warehouse), "warehouse not found"))
         return result
     index = Index(warehouse)
     tools: dict[str, tuple[str, dict[str, Any]]] = {}
     for harness in harnesses:
+        if target is None:
+            break  # a kit.yaml without --loadout: only the listing cost below
         state = observe(report, index, harness)
         section: dict[str, Any] = {
             "observed": {k: v for k, v in state["enabled"].items()},
@@ -415,4 +420,78 @@ def doctor(
                 "mismatch": f"{line!r} does not match {expect!r}",
             }[status]
             findings.append(_finding(severity, "tool", ref, detail, tool["install_hint"]))
+    _listing(warehouse, report, index, active, result, saw_home)
     return result
+
+
+def _active_set(
+    roots: list[Path],
+    target: str | None,
+    harnesses: tuple[str, ...],
+    findings: list[dict[str, Any]],
+) -> dict[str, list[tuple[str, str]]]:
+    """(target, scope) pairs that list in a session, per harness: --loadout plus every loadout
+    in the kit.yaml of an inspected root (~/.kit/kit.yaml when the root is home)."""
+    active: dict[str, list[tuple[str, str]]] = {
+        h: [(target, "project")] if target else [] for h in harnesses
+    }
+    for root in roots:
+        root = root.expanduser().resolve()
+        if not root.is_dir():
+            continue
+        try:
+            intent = engine.read_intent(root)
+        except (engine.EngineError, OSError) as error:
+            findings.append(_finding("warning", "intent", str(root), str(error)))
+            continue
+        scope = "user" if engine.is_user_scope(root) else "project"
+        for item in intent["loadouts"]:
+            if scope == "project" and target and split_target(item)[0] == split_target(target)[0]:
+                continue  # --loadout names the one doctor checks
+            for harness in harnesses:
+                if harness in intent["harnesses"] and (item, scope) not in active[harness]:
+                    active[harness].append((item, scope))
+    return active
+
+
+def _listing(
+    warehouse: Path,
+    report: Any,
+    index: Index,
+    active: dict[str, list[tuple[str, str]]],
+    result: dict[str, Any],
+    saw_home: bool,
+) -> None:
+    """Listing cost per harness, and a warning when it is over the strictest budget."""
+    installed: dict[str, str] = {}
+    for item in report["native"]["installed_plugins"]:
+        if item.get("path") and item["id"] not in installed:
+            installed[item["id"]] = str(item["path"])
+    budget = strictest_budget(
+        warehouse, sorted({target for pairs in active.values() for target, _ in pairs})
+    )
+    for harness, targets in active.items():
+        if not targets:
+            continue
+        plugin_ids = {ref: pid for (h, pid), ref in index.plugins.items() if h == harness}
+        cost = listing_cost(warehouse, targets, harness, installed, plugin_ids)
+        if (
+            harness == "claude"
+            and not installed
+            and any("plugin:" in n for n in cost["not_measured"])
+        ):
+            cost["not_measured"].append(
+                "Claude Code's installed plugins are read only when home is a root (--root ~)"
+            )
+        result["harnesses"].setdefault(harness, {})["listing_cost"] = cost
+        for message in over_budget(cost, budget):
+            result["findings"].append(
+                _finding(
+                    "warning",
+                    "budget",
+                    harness,
+                    f"always-on listing: {message}",
+                    "drop or hide (disable-model-invocation) a skill, trim the instructions, "
+                    "or raise the budget",
+                )
+            )

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-KINDS = ("skills", "mcp", "hooks", "plugins", "marketplaces", "tools")
+KINDS = ("skills", "agents", "mcp", "hooks", "plugins", "marketplaces", "tools")
 
 FILES = {
     "README.md": """# My kit warehouse
@@ -16,8 +16,8 @@ config in the repos you point it at.
 
 - `loadouts/`: named bundles. `starter` is a harmless first one: a short instruction block
   and a check that git is installed.
-- `primitives/<kind>/`: the skills, MCP servers, hooks, plugins, marketplaces and tools
-  loadouts refer to (`kind:name`). The format is kitctl's docs/model.md.
+- `primitives/<kind>/`: the skills, agents, MCP servers, hooks, plugins, marketplaces and
+  tools loadouts refer to (`kind:name`). The format is kitctl's docs/model.md.
 
 Try it in a repo:
 

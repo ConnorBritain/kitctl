@@ -11,7 +11,7 @@ from kitctl.cli import main
 from kitctl.forge import ForgeError, load_candidates, new_brief, propose, verify
 from kitctl.model import load_yaml
 from kitctl.resolve import resolve
-from kitctl.scout import scout, vendor
+from kitctl.scout import ScoutError, scout, vendor
 
 
 def write_yaml(path: Path, text: str) -> None:
@@ -138,6 +138,17 @@ def test_uncited_and_invented_claims_are_rejected(forged: dict[str, Any]) -> Non
     path.write_text(forged["text"].replace("[README.md:1]", "[a hunch]"))
     with pytest.raises(ForgeError, match="not file:line"):
         load_candidates(warehouse, "copy-kit", cache)
+
+
+def test_agents_are_neither_forged_nor_vendored(forged: dict[str, Any]) -> None:
+    warehouse, cache = forged["warehouse"], forged["cache"]
+    (warehouse / "forge/copy-kit/candidates.yaml").write_text(
+        forged["text"].replace("kind: skill, name: tidy-copy", "kind: agent, name: tidy-copy")
+    )
+    with pytest.raises(ForgeError, match="forge does not propose agents"):
+        load_candidates(warehouse, "copy-kit", cache)
+    with pytest.raises(ScoutError, match="agents are not vendored"):
+        vendor("any", "agents/x.md", warehouse, cache, kind="agent")
 
 
 def test_two_providers_for_a_required_slot_is_an_error(forged: dict[str, Any]) -> None:

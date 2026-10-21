@@ -275,7 +275,12 @@ def load_candidates(
                 problems.append(f"{where}.fills: bad slot {slot!r}")
         config = candidate.get("config")
         if verdict in {"adopt", "vendor"}:
-            if (
+            if isinstance(config, dict) and config.get("kind") == "agent":
+                problems.append(
+                    f"{where}.config.kind: forge does not propose agents; render the agent's "
+                    "claude.md and codex.toml by hand (docs/model.md#agents)"
+                )
+            elif (
                 not isinstance(config, dict)
                 or config.get("kind") not in CONFIG_KINDS
                 or not (isinstance(config.get("name"), str) and NAME_RE.match(config["name"]))

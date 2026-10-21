@@ -64,13 +64,14 @@ original bytes like it does in a project.
 
 | Project target | User target |
 |---|---|
-| `.claude/settings.json`, `.claude/skills/<n>/` | `~/.claude/…` (or `$CLAUDE_CONFIG_DIR/…`) |
+| `.claude/settings.json`, `.claude/skills/<n>/`, `.claude/agents/<n>.md` | `~/.claude/…` (or `$CLAUDE_CONFIG_DIR/…`) |
 | `CLAUDE.md` block | `~/.claude/CLAUDE.md` |
-| `.codex/config.toml`, `.codex/hooks.json` | `~/.codex/…` (or `$CODEX_HOME/…`) |
+| `.codex/config.toml`, `.codex/hooks.json`, `.codex/agents/<n>.toml` | `~/.codex/…` (or `$CODEX_HOME/…`) |
 | `AGENTS.md` block | `~/.codex/AGENTS.md` |
 | `.agents/skills/<n>/`, `.cursor/mcp.json`, `.cursor/hooks.json` | `~/.agents/…`, `~/.cursor/…` |
 | `.mcp.json` (Claude MCP) | a gap whose remedy is the `claude mcp add --scope user …` command: user servers live in `~/.claude.json`, which Claude Code rewrites all the time, so Kit does not own it |
 | `.cursor/rules/kit-<loadout>.mdc`, `.cursor/skills/` | gaps: Cursor keeps user rules in its settings |
+| agents on Cursor | a gap in both scopes: no Cursor agent location is verified |
 
 Codex reads single-skill disables only from user config, so in user scope a disabled skill
 becomes one `[[skills.config]]` table (`name`, `enabled = false`) Kit owns by value; your
@@ -88,6 +89,12 @@ comment inside a `[[skills.config]]` table Kit owns blocks `off` until you move 
 (`.cursor/skills/` for Cursor), one owned file per asset. A changed skill in the warehouse
 updates the copy; `off` removes it. An existing file Kit did not write, a symlink, or a
 non-UTF-8 asset is a conflict. External skills (`external: true`) are not copied.
+
+**Agents.** An agent primitive's ready files are copied whole: `claude.md` to
+`.claude/agents/<name>.md` and `codex.toml` to `.codex/agents/<name>.toml`, each an owned
+file with LF line endings. Updates, drift and `off` work as for skills, and an existing file
+Kit did not write is a conflict. Codex project agents carry an `unverified` gap (only
+`$CODEX_HOME/agents/` has been seen loading); Cursor gets an `unsupported` gap.
 
 **Setup steps.** After `kitctl use` writes a loadout's config, it lists the loadout's
 `setup` steps and asks `Run N setup step(s)? [y/N]` (`--yes` runs them). A step whose
@@ -109,6 +116,8 @@ Every write takes `--dry-run`. Without a terminal and without `--yes`, nothing i
 | Cursor | `.cursor/mcp.json` | `mcpServers.<id>`, env and headers as `${env:NAME}` |
 | Cursor | `.cursor/hooks.json` | `version`, and `hooks.<event>` entries (array elements owned by value) |
 | Cursor | `.cursor/rules/kit-NAME.mdc` | the whole generated file (format `file`): frontmatter `alwaysApply: true`, then the instructions |
+| Claude, Codex, Cursor | `.claude/skills/<n>/`, `.agents/skills/<n>/`, `.cursor/skills/<n>/` | each skill asset, a whole owned file |
+| Claude, Codex | `.claude/agents/<n>.md`, `.codex/agents/<n>.toml` | the agent's ready file for that harness, a whole owned file |
 | Claude, Codex | `CLAUDE.md` / `AGENTS.md` | `<!-- kit:begin NAME -->` … `<!-- kit:end NAME -->` |
 
 Every Cursor fact is documented only, never verified (see

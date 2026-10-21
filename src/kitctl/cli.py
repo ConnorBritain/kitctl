@@ -270,6 +270,15 @@ def _doctor(args: argparse.Namespace) -> int:
     else:
         for tool in report["tools"]:
             print(f"{tool['status']:8}  {tool['identity']}  {tool['output']}")
+        for harness, section in report["harnesses"].items():
+            cost = section.get("listing_cost")
+            if cost:
+                print(
+                    f"listing  {harness}: {cost['tokens']} tokens, {cost['skills']} skills "
+                    f"({cost['method']})"
+                )
+                for item in cost["not_measured"]:
+                    print(f"         not measured: {item}")
         for finding in report["findings"]:
             print(
                 f"{finding['severity']:7}  {finding['check']}: {finding['subject']}: "

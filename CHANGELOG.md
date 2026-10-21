@@ -7,6 +7,32 @@
 Kit writes: loadouts apply to a project or to your home with a plan, a confirmation and a
 byte-for-byte undo.
 
+- Worker agents: a new `agent` primitive kind (`primitives/agents/<name>.yaml` plus a
+  `<name>/` folder with the author's ready `claude.md` and/or `codex.toml`) and a loadout
+  `agents:` list (profiles can narrow it). Kit copies `claude.md` to
+  `.claude/agents/<name>.md` and `codex.toml` to `.codex/agents/<name>.toml` as owned
+  whole files, in a project or (`--user`) under `~/.claude` and `$CODEX_HOME`; it never
+  converts between formats. Codex project agents carry an `unverified` gap and Cursor an
+  `unsupported` one. `validate` reports a missing folder or harness file, TOML that does
+  not parse, a missing Codex `name`/`description`/`developer_instructions`, and a
+  `claude.md` frontmatter name that differs from the file name. Inventory lists
+  `.claude/agents/*.md` and `.codex/agents/*.toml`; `init` makes `primitives/agents/`;
+  forge and `vendor` refuse agents.
+- Listing cost: `doctor` estimates each harness's always-on listing (instruction block,
+  listed skills and agents as `name: description`, `ceil(chars / 4)` as in Gestalt) for
+  `--loadout` plus the loadouts in each root's `kit.yaml`, and names what it cannot
+  measure (plugin skills it cannot read, MCP servers). Skills with
+  `disable-model-invocation: true` and skills the loadout disables cost nothing. A loadout
+  or profile `budget: {tokens, skills}` turns an over-budget listing into a `budget`
+  warning (never an error); the child layer or profile overrides its parent.
+
+- Fixes from reviewing this release: `eject` no longer refuses an instruction block (or a
+  skill or agent file) that merely mentions kitctl, which made the starter loadout
+  impossible to eject; a malformed `kit.yaml` is an error message instead of a traceback;
+  two whole files for one target (`acme/review` and `team/review` both landing as
+  `review`) are a conflict instead of one silently overwriting the other; a folder (or
+  other non-file) where Kit would write a file is a conflict at plan time instead of a
+  failure halfway through apply; a `.git` folder inside a warehouse skill is not copied.
 - User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
   `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
   `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring

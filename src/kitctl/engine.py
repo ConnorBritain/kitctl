@@ -26,10 +26,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from kitctl import __version__, formats
 from kitctl.formats import MISSING, FormatError, Style, detect_style
-from kitctl.model import DEFAULT_HARNESSES, HARNESSES, ModelError, is_traversal
+from kitctl.model import DEFAULT_HARNESSES, HARNESSES, KIND_DIRS, ModelError, is_traversal
 from kitctl.resolve import resolve, split_target
 
 INTENT = "kit.yaml"
@@ -174,7 +175,11 @@ def read_intent(repo: Path) -> dict[str, Any]:
     path = repo / intent_path(repo)
     if not path.exists():
         return {"schema_version": 1, "loadouts": [], "harnesses": list(DEFAULT_HARNESSES)}
-    data = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8")) or {}
+    try:
+        data = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8")) or {}
+    except (YAMLError, UnicodeDecodeError) as error:
+        first = str(error).strip().splitlines()[0] if str(error).strip() else "invalid YAML"
+        raise EngineError(f"{path} is not valid YAML ({first}); fix it by hand") from error
     # `live` was the earlier opt-in to write outside the sandbox; still read, no longer needed.
     keys = {"schema_version", "loadouts", "harnesses", "live"}
     if not isinstance(data, dict) or set(data) - keys:
@@ -281,25 +286,55 @@ class Desired:
     conflicts: list[str] = field(default_factory=list)
 
 
+# What a placeholder effect copies from a primitive's asset directory. "directory": the whole
+# directory, which must hold the marker file; "asset": the one file named by the effect's key.
+DIRECTORY_MARKERS = {"skill": "SKILL.md"}
+
+
+def _asset_files(
+    warehouse: Path, effect: dict[str, Any], conflicts: list[str]
+) -> list[tuple[Path, str, str]] | None:
+    """(source file, target, relative name) for each file a placeholder copies, or None."""
+    kind, _, name = effect["source"].partition(":")
+    root = warehouse / "primitives" / KIND_DIRS[kind] / PurePosixPath(name)
+    if effect["format"] == "asset":
+        path = root / effect["key"]
+        if not root.is_dir() or not (path.is_file() or path.is_symlink()):
+            conflicts.append(f"{effect['source']}: no {name}/{effect['key']} in the warehouse")
+            return None
+        return [(path, effect["target"], effect["key"])]
+    marker = DIRECTORY_MARKERS.get(kind)
+    if not root.is_dir() or (marker and not (root / marker).is_file()):
+        conflicts.append(
+            f"{effect['source']}: no {kind} directory with a {marker} in the warehouse"
+            if marker
+            else f"{effect['source']}: no {kind} directory in the warehouse"
+        )
+        return None
+    # Like the content hash, a nested .git (a skill cloned in place) is not an asset.
+    return [
+        (
+            path,
+            f"{effect['target']}{path.relative_to(root).as_posix()}",
+            path.relative_to(root).as_posix(),
+        )
+        for path in sorted(p for p in root.rglob("*") if p.is_file() or p.is_symlink())
+        if ".git" not in path.relative_to(root).parts
+    ]
+
+
 def _expand_directories(
     warehouse: Path, effects: list[dict[str, Any]], conflicts: list[str]
 ) -> list[dict[str, Any]]:
-    """A skill directory becomes one whole file per asset, each owned by path like a generated
-    rule file, so `off` removes exactly what Kit copied and drift shows per file."""
+    """A skill directory or an agent's harness file becomes one whole file per asset, each
+    owned by path like a generated rule file, so `off` removes exactly what Kit copied and
+    drift shows per file."""
     out = []
     for effect in effects:
-        if effect["format"] != "directory":
+        if effect["format"] not in ("directory", "asset"):
             out.append(effect)
             continue
-        kind, _, name = effect["source"].partition(":")
-        root = warehouse / "primitives" / f"{kind}s" / PurePosixPath(name)
-        if not root.is_dir() or not (root / "SKILL.md").is_file():
-            conflicts.append(
-                f"{effect['source']}: no skill directory with a SKILL.md in the warehouse"
-            )
-            continue
-        for path in sorted(p for p in root.rglob("*") if p.is_file() or p.is_symlink()):
-            rel = path.relative_to(root).as_posix()
+        for path, target, rel in _asset_files(warehouse, effect, conflicts) or []:
             if path.is_symlink():
                 conflicts.append(f"{effect['source']}: {rel} is a symlink; Kit copies files only")
                 continue
@@ -313,7 +348,7 @@ def _expand_directories(
             out.append(
                 {
                     **effect,
-                    "target": f"{effect['target']}{rel}",
+                    "target": target,
                     "format": "file",
                     "key": effect["source"],
                     "value": text,
@@ -347,6 +382,7 @@ def _user_targets() -> tuple[dict[str, str], dict[str, str]]:
 
 def desired_state(warehouse: Path, intent: dict[str, Any], user: bool = False) -> Desired:
     result = Desired()
+    whole_files: dict[str, str] = {}  # target -> the key (source) that owns the whole file
     prefixes: dict[str, str] = {}
     problems: dict[str, str] = {}
     if user:
@@ -394,6 +430,16 @@ def desired_state(warehouse: Path, intent: dict[str, Any], user: bool = False) -
                     "owners": [owner],
                 }
                 ident = entry_id(entry)
+                if entry["format"] == "file":
+                    # A whole file has one owner key; two primitives whose names end alike
+                    # (acme/review and team/review) would otherwise overwrite each other.
+                    claimed = whole_files.setdefault(entry["target"], entry["key"])
+                    if claimed != entry["key"]:
+                        result.conflicts.append(
+                            f"{entry['target']}: both {claimed} and {entry['key']} write this "
+                            "file; rename one"
+                        )
+                        continue
                 existing = result.entries.get(ident)
                 if existing is None:
                     result.entries[ident] = entry
@@ -481,6 +527,9 @@ class Doc:
             p.is_symlink() for p in self.path.parents if p.is_relative_to(repo) and p != repo
         ):
             self.conflict = f"{target} is a symlink; Kit will not write through links"
+        elif self.path.exists() and not self.path.is_file():
+            # Caught here, not halfway through replacing files during apply.
+            self.conflict = f"{target} exists and is not a regular file"
         self.before = self.path.read_bytes() if self.path.is_file() else None
         try:
             text = self.before.decode("utf-8") if self.before else ""
@@ -1076,10 +1125,13 @@ def eject(repo: Path) -> list[str]:
     if (repo / JOURNAL).exists():
         raise EngineError("an earlier apply was interrupted; run `kitctl apply` to recover first")
     ledger = read_ledger(repo)
+    # A config value that runs kitctl (a hook command) stops working once Kit is gone; text
+    # that merely mentions kitctl (an instruction block, a skill or agent file) does not.
     dependent = [
         entry_id(e)
         for e in ledger["entries"]
-        if "${plugin:" in _canonical(e["value"]) or "kitctl" in _canonical(e["value"])
+        if "${plugin:" in _canonical(e["value"])
+        or (e["format"] in ("json", "toml") and "kitctl" in _canonical(e["value"]))
     ]
     if dependent:
         raise EngineError(
