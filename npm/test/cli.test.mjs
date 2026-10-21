@@ -14,7 +14,7 @@ test("bundled wheel works without a PyPI release and forwards arguments", () => 
   try {
     const version = spawnSync(process.execPath, [bin, "--version"], { env, encoding: "utf8" });
     assert.equal(version.status, 0, version.stderr);
-    assert.match(version.stdout, /^kitctl 0\.0\.1\r?\n$/);
+    assert.match(version.stdout, /^kitctl 0\.1\.0\r?\n$/);
     const repo = path.join(root, "repo with spaces");
     mkdirSync(repo);
     writeFileSync(path.join(repo, "AGENTS.md"), "Fixture instructions");

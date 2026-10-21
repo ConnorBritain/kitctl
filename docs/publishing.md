@@ -1,3 +1,20 @@
+# Publishing
+
+## 0.1.0 — prepared 2026-10-21, not yet published
+
+The owner publishes; nothing is uploaded from a cloud session. Same procedure as 0.0.1
+below, with the new tag:
+
+1. Merge the release PR to main and confirm CI is green on Linux and Windows.
+2. Tag the merge commit: `git tag v0.1.0 <sha> && git push origin v0.1.0`.
+3. `gh workflow run publish-python.yml --ref v0.1.0 -f target=testpypi`, then
+   `uvx --index https://test.pypi.org/simple/ --from kitctl==0.1.0 kitctl --version`.
+4. `gh workflow run publish-python.yml --ref v0.1.0 -f target=pypi`, then
+   `uvx --from kitctl==0.1.0 kitctl --version`.
+5. npm, from the same tag: the [npm](#npm) steps with `kitctl-0.1.0.tgz`.
+6. Smoke test in a temporary HOME: `kitctl init`, `kitctl validate`,
+   `kitctl use starter --repo <tmp repo> --yes`, `kitctl off starter --repo <tmp repo> --yes`.
+
 # Publishing 0.0.1
 
 ## Verified release record — 2026-10-11

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const wheel = fileURLToPath(new URL("../python/kitctl-0.0.1-py3-none-any.whl", import.meta.url));
+const wheel = fileURLToPath(new URL("../python/kitctl-0.1.0-py3-none-any.whl", import.meta.url));
 if (!existsSync(wheel)) {
   console.error("kitctl: bundled Python wheel is missing; reinstall the npm package.");
   process.exit(1);

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.0 — not yet published (tag `v0.1.0`; see docs/publishing.md)
+
+Kit writes: loadouts apply to a project or to your home with a plan, a confirmation and a
+byte-for-byte undo.
+
 - User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
   `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
   `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring
