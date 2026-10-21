@@ -64,6 +64,15 @@ def warehouse(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def apply_warehouse(warehouse: Path) -> Path:
+    # Kit does not copy skill directories yet on any harness (the engine reports it as a
+    # conflict), so the apply round trips use the same loadout without its skill.
+    path = warehouse / "loadouts" / "cursor-kit.yaml"
+    path.write_text(LOADOUT.replace("skills: [skill:helper]\n", ""))
+    return warehouse
+
+
+@pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     project = tmp_path / "sandbox" / "site"
     (project / ".claude").mkdir(parents=True)
@@ -140,10 +149,10 @@ def test_plugins_skills_and_disables_are_gaps_with_soft_rules(warehouse: Path) -
     assert found[("plugin:own", "plugin_enable")] == "manual-step"
     assert found[("plugin:ext", "plugin_disable")] == "unsupported"
     assert found[("skill:noisy", "skill_disable")] == "unsupported"
-    assert found[("skill:helper", "skill_dir")] == "unsupported"
+    assert found[("skill:helper", "skill_dir")] == "unverified"
+    assert any(e["target"] == ".cursor/skills/helper/" for e in result["effects"])
     # Whether Cursor gates .cursor/ on trust is unknown: flagged, never claimed either way.
     assert found[("loadout:cursor-kit", "project_trust")] == "unverified"
-    assert not any(e["format"] == "directory" for e in result["effects"])
     text = result["instructions"]["text"]
     assert "- Do not use ext in this repository." in text
     assert "- Do not use noisy in this repository." in text
@@ -173,9 +182,9 @@ def test_brand_studio_marketplace_is_a_manual_step_when_cursor_is_named(tmp_path
     assert not any(e["target"].startswith(".claude") for e in result["effects"])
 
 
-def test_sandbox_apply_repeat_off_restores_baseline(repo: Path, warehouse: Path) -> None:
+def test_sandbox_apply_repeat_off_restores_baseline(repo: Path, apply_warehouse: Path) -> None:
     baseline = tree(repo)
-    plan = apply(repo, warehouse, intent("cursor-kit"))
+    plan = apply(repo, apply_warehouse, intent("cursor-kit"))
     assert set(plan.changes) == {
         ".cursor/hooks.json",
         ".cursor/mcp.json",
@@ -196,8 +205,8 @@ def test_sandbox_apply_repeat_off_restores_baseline(repo: Path, warehouse: Path)
     mcp = json.loads((repo / ".cursor/mcp.json").read_text())["mcpServers"]
     assert mcp["local"]["env"]["API_KEY"] == "${env:API_KEY}"
     assert engine.read_intent(repo)["harnesses"] == ["cursor"]
-    assert engine.make_plan(repo, warehouse, engine.read_intent(repo)).changes == {}
-    apply(repo, warehouse, intent(harnesses=("cursor",)))
+    assert engine.make_plan(repo, apply_warehouse, engine.read_intent(repo)).changes == {}
+    apply(repo, apply_warehouse, intent(harnesses=("cursor",)))
     assert tree(repo) == baseline
     assert not (repo / ".cursor").exists()
 
@@ -213,8 +222,8 @@ def test_brand_studio_on_all_three_harnesses_round_trips(repo: Path) -> None:
     assert tree(repo) == baseline
 
 
-def test_eject_keeps_cursor_files_without_kit_state(repo: Path, warehouse: Path) -> None:
-    apply(repo, warehouse, intent("cursor-kit"))
+def test_eject_keeps_cursor_files_without_kit_state(repo: Path, apply_warehouse: Path) -> None:
+    apply(repo, apply_warehouse, intent("cursor-kit"))
     rule = (repo / RULE).read_bytes()
     touched = engine.eject(repo)
     assert "kit.lock" in touched and RULE not in touched
@@ -236,10 +245,10 @@ def test_existing_rule_file_is_never_taken_over(repo: Path, warehouse: Path) -> 
     assert path.read_text().endswith("Mine.\n")
 
 
-def test_edited_rule_file_is_drift_not_removed(repo: Path, warehouse: Path) -> None:
-    apply(repo, warehouse, intent("cursor-kit"))
+def test_edited_rule_file_is_drift_not_removed(repo: Path, apply_warehouse: Path) -> None:
+    apply(repo, apply_warehouse, intent("cursor-kit"))
     (repo / RULE).write_text((repo / RULE).read_text() + "My note.\n")
-    plan = engine.make_plan(repo, warehouse, intent(harnesses=("cursor",)))
+    plan = engine.make_plan(repo, apply_warehouse, intent(harnesses=("cursor",)))
     assert any(c.startswith(f"drift: {RULE}#kit:cursor-kit") for c in plan.conflicts)
 
 

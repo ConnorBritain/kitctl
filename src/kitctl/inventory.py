@@ -24,7 +24,7 @@ CONFIG_PATHS = (
     "kit.yaml",
     "kit.lock",
 )
-SKILL_PATHS = (".claude/skills", ".agents/skills", ".codex/skills")
+SKILL_PATHS = (".claude/skills", ".agents/skills", ".codex/skills", ".cursor/skills")
 
 
 @dataclass(frozen=True)

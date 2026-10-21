@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Cursor: project skills go to `.cursor/skills/<name>/` and doctor sees them there; every Cursor hook carries a `trust-required` gap (trusted workspaces load project hooks); a loadout that writes only the `.mdc` rule still gets the unverified trust gap. Source: cursor/cookbook@6733ef8.
+
 - Cursor is a third harness (`--harness cursor`, `harnesses: [cursor]` in kit.yaml).
   It writes `.cursor/mcp.json` with `${env:NAME}` references, maps `Stop` and
   edit-only `PostToolUse` hooks to `.cursor/hooks.json` (`stop`, `afterFileEdit`),

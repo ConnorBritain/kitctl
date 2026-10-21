@@ -163,6 +163,15 @@
     },
     {
       "harness": "cursor",
+      "subject": "loadout:brand-studio",
+      "capability": "project_trust",
+      "severity": "unverified",
+      "reason": "unknown: no source says whether Cursor gates project .cursor/ files on workspace trust; Kit claims no trust step and flags that as unverified",
+      "remedy": "check in a sandbox whether cursor needs the project trusted",
+      "fallback": null
+    },
+    {
+      "harness": "cursor",
       "subject": "plugin:brand-builder",
       "capability": "plugin_enable",
       "severity": "manual-step",

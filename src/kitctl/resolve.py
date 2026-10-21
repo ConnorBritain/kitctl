@@ -622,6 +622,13 @@ class Compiler:
                 "hooks_project_file",
             )
             self.unverified(primitive.identity, "hooks_project_file")
+            self.gap(
+                primitive.identity,
+                "hook_trust",
+                "trust-required",
+                self.fact("hooks_trust_required").note + "; Kit never writes trust",
+                remedy="trust the workspace in Cursor before expecting project hooks to run",
+            )
             if "timeout" in data:
                 self.gap(
                     primitive.identity,
@@ -670,20 +677,19 @@ class Compiler:
         )
 
     def skill(self, primitive: Primitive, layer: str) -> None:
-        if self.name == "cursor":
-            self.gap(
-                primitive.identity,
-                "skill_dir",
-                "unsupported",
-                self.fact("skill_dir").note,
-                remedy="ship the skill inside a Cursor plugin, or copy it in by hand",
-            )
-            return
         name = primitive.name.rsplit("/", 1)[-1]
-        target = f".claude/skills/{name}/" if self.name == "claude" else f".agents/skills/{name}/"
+        target = {"claude": ".claude/skills", "codex": ".agents/skills", "cursor": ".cursor/skills"}
         self.add(
-            target, "directory", "", primitive.content_hash, primitive.identity, layer, "skill_dir"
+            f"{target[self.name]}/{name}/",
+            "directory",
+            "",
+            primitive.content_hash,
+            primitive.identity,
+            layer,
+            "skill_dir",
         )
+        if self.name == "cursor":
+            self.unverified(primitive.identity, "skill_dir")
 
     def disable(self, primitive: Primitive, layer: str, loaded: dict[str, Primitive]) -> None:
         subject = primitive.identity
@@ -1015,6 +1021,11 @@ def resolve(
     for primitive, layer in external_disables:
         compiler.disable(primitive, layer, loaded)
     trust = facts.facts["project_trust_required"]
+    # On Cursor the instruction block is a whole .cursor/rules file outside compiler.effects;
+    # it is a project write all the same.
+    writes = bool(compiler.effects) or (
+        harness == "cursor" and bool(merged.instructions or compiler.soft_rules)
+    )
     if trust.supported and compiler.effects:
         compiler.gap(
             f"loadout:{name}",
@@ -1023,7 +1034,7 @@ def resolve(
             trust.note + "; Kit never writes trust",
             remedy="trust the project in Codex before expecting these effects",
         )
-    elif trust.evidence != "verified" and compiler.effects:
+    elif trust.evidence != "verified" and writes:
         # "No trust step" is a guess on this harness: say so rather than stay silent.
         compiler.gap(
             f"loadout:{name}",

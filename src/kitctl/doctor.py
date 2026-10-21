@@ -132,8 +132,11 @@ def observe(report: Any, index: Index, harness: str) -> dict[str, Any]:
             add(index.plugins.get((harness, plugin_id)), f"plugin {plugin_id}", f"{scope}: {file}")
             if scope == "local":
                 local_true.add(plugin_id)
-    # Cursor has no documented project skill directory, so no skill counts as enabled there.
-    skill_dirs = {"claude": "/.claude/skills/", "codex": "/.agents/skills/"}.get(harness)
+    skill_dirs = {
+        "claude": "/.claude/skills/",
+        "codex": "/.agents/skills/",
+        "cursor": "/.cursor/skills/",
+    }.get(harness)
     for entry in report["entries"]:
         if (
             skill_dirs

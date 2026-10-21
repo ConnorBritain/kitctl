@@ -121,6 +121,7 @@ CODEX = Harness(
 # day; anything attributed to them below is recalled, not re-read.
 CURSOR_SOURCE = "cursor/plugins@29fa938"
 TRAIL_SOURCE = "Trail-code 0.23.0's sandbox run"
+COOKBOOK_SOURCE = "cursor/cookbook@6733ef8"
 
 CURSOR = Harness(
     name="cursor",
@@ -184,10 +185,16 @@ CURSOR = Harness(
             f"({TRAIL_SOURCE} wrote .cursor/rules/trail.mdc so; rules/*.mdc in {CURSOR_SOURCE})",
         ),
         "skill_dir": Fact(
-            False,
+            True,
             "documented",
-            f"no project skill directory for Cursor is documented; {CURSOR_SOURCE} ships skills "
-            "only inside plugins",
+            f"project skills live in .cursor/skills/<name>/ ({COOKBOOK_SOURCE} hooks/README.md: "
+            "update-skills-on-stop.mjs maintains .cursor/skills/*/SKILL.md)",
+        ),
+        "hooks_trust_required": Fact(
+            True,
+            "documented",
+            f"trusted workspaces load project hooks from .cursor/hooks.json ({COOKBOOK_SOURCE} "
+            "hooks/README.md); whether other .cursor/ files need trust is unknown",
         ),
         "project_trust_required": Fact(
             False,
