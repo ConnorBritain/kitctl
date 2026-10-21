@@ -252,12 +252,12 @@ def test_edited_rule_file_is_drift_not_removed(repo: Path, apply_warehouse: Path
     assert any(c.startswith(f"drift: {RULE}#kit:cursor-kit") for c in plan.conflicts)
 
 
-def test_live_apply_is_still_refused(
-    repo: Path, warehouse: Path, monkeypatch: pytest.MonkeyPatch
+def test_sandbox_confines_cursor_writes(
+    repo: Path, warehouse: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv(engine.SANDBOX_ENV)
+    monkeypatch.setenv(engine.SANDBOX_ENV, str(tmp_path / "elsewhere"))
     plan = engine.make_plan(repo, warehouse, intent("cursor-kit"))
-    with pytest.raises(engine.EngineError, match="sandbox"):
+    with pytest.raises(engine.EngineError, match="outside"):
         engine.apply_plan(plan)
     assert not (repo / ".cursor").exists()
 

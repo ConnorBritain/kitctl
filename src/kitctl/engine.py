@@ -39,6 +39,24 @@ JOURNAL = f"{STATE}/journal.json"
 LOCKFILE = f"{STATE}/lock"
 PREIMAGES = f"{STATE}/preimages"
 LEDGER_VERSION = 1
+# User scope (the root is home): intent and ledger live in .kit/, never loose in ~.
+USER_INTENT = f"{STATE}/kit.yaml"
+USER_LEDGER = f"{STATE}/kit.lock"
+
+
+def is_user_scope(repo: Path) -> bool:
+    """Kit runs in user scope when the root is the home directory (`--user`)."""
+    return repo.resolve() == Path.home().resolve()
+
+
+def intent_path(repo: Path) -> str:
+    return USER_INTENT if is_user_scope(repo) else INTENT
+
+
+def ledger_path(repo: Path) -> str:
+    return USER_LEDGER if is_user_scope(repo) else LEDGER
+
+
 SANDBOX_ENV = "KITCTL_SANDBOX"
 JSON_TARGETS = {
     ".claude/settings.json",
@@ -105,74 +123,45 @@ def _git(repo: Path, *args: str, strip: bool = True) -> str | None:
     return done.stdout.strip() if strip else done.stdout
 
 
-def live_refusals(repo: Path, recovering: bool = False) -> list[str]:
-    """Why a live (non-sandbox) write is refused here; empty when every owner opt-in holds.
-
-    Live apply is the owner's explicit choice, made in the repository itself: the committed
-    kit.yaml says `live: true`, the tracked tree is clean (so git can undo the apply), and the
-    work happens on a named branch: never main, master or the remote's default. The one
-    exception to a clean tree is recovery of an interrupted apply, and only when every
-    uncommitted file is one its journal names (Kit's own writes in flight).
-    """
+def write_warnings(repo: Path) -> list[str]:
+    """What to know before Kit writes here. None of it blocks: `kitctl off` restores the
+    original bytes from Kit's own preimages in .kit/, with or without git."""
+    if is_user_scope(repo):
+        return ["user scope: every session on this machine sees these changes"]
     if _git(repo, "rev-parse", "--is-inside-work-tree") != "true":
-        return ["not a git work tree; live apply needs git as its undo"]
-    reasons = []
-    committed = _git(repo, "show", f"HEAD:./{INTENT}")
-    try:
-        data = YAML(typ="safe", pure=True).load(committed) if committed else None
-    except Exception:  # noqa: BLE001 - any unreadable committed kit.yaml means no opt-in
-        data = None
-    if not (isinstance(data, dict) and data.get("live") is True):
-        reasons.append(f"the committed {INTENT} does not say `live: true`")
-    status = _git(repo, "status", "--porcelain", "-z", "--untracked-files=no", strip=False)
-    if status is None or (status and not (recovering and _only_in_flight(repo, status))):
-        reasons.append("tracked files have uncommitted changes; commit or stash them first")
+        return ["not a git repository: `kitctl off` is the undo (Kit keeps the original bytes)"]
+    warnings = []
+    if _git(repo, "status", "--porcelain", "--untracked-files=no"):
+        warnings.append("tracked files have uncommitted changes; Kit's edits will mix with them")
     branch = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
-    if not branch:
-        reasons.append("HEAD is detached; check out a named branch")
-    else:
-        remote_head = _git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
-        protected = {"main", "master"}
-        if remote_head and "/" in remote_head:
-            protected.add(remote_head.split("/", 1)[1])
-        if branch in protected:
-            reasons.append(f"{branch} is a default branch; apply on another branch")
-    return reasons
+    remote_head = _git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    protected = {"main", "master"}
+    if remote_head and "/" in remote_head:
+        protected.add(remote_head.split("/", 1)[1])
+    if branch in protected:
+        warnings.append(f"on {branch}; a branch lets the change be reviewed before it lands")
+    return warnings
 
 
-def _only_in_flight(repo: Path, status: str) -> bool:
-    """Every path in `git status -z` output is a target of the interrupted apply's journal."""
-    try:
-        journal = json.loads((repo / JOURNAL).read_text(encoding="utf-8"))
-        targets = {item["target"] for item in journal["files"]}
-    except (OSError, ValueError, KeyError, TypeError):
-        return False
-    prefix = _git(repo, "rev-parse", "--show-prefix") or ""
-    paths = [entry[3:] for entry in status.split("\0") if len(entry) > 3]
-    return all(p.startswith(prefix) and p[len(prefix) :] in targets for p in paths)
+def check_write_allowed(repo: Path) -> None:
+    """When $KITCTL_SANDBOX is set, every write stays inside it (tests, CI, a first try).
 
-
-def check_write_allowed(repo: Path, live: bool = False, recovering: bool = False) -> None:
-    """Writes land inside $KITCTL_SANDBOX, or in a repo whose owner opted in to live apply."""
+    Kit's own state is checked too: a symlinked .kit/ or .kit/preimages would carry the
+    preimages, journal and lock somewhere else, sandbox or not.
+    """
+    for rel in (STATE, PREIMAGES):
+        if (repo / rel).is_symlink():
+            raise EngineError(f"{rel} is a symlink; Kit keeps its state in the project only")
     sandbox = os.environ.get(SANDBOX_ENV)
-    if sandbox:
-        try:
-            repo.resolve().relative_to(Path(sandbox).resolve())
-            return
-        except ValueError:
-            if not live:
-                raise EngineError(
-                    f"{repo} is outside {SANDBOX_ENV}={sandbox}; refusing to write "
-                    "(a real repository needs --live and its owner's opt-in; see docs/apply.md)"
-                ) from None
-    if not live:
+    if not sandbox:
+        return
+    try:
+        repo.resolve().relative_to(Path(sandbox).resolve())
+    except ValueError:
         raise EngineError(
-            f"writes need a sandbox ({SANDBOX_ENV}) or a live apply: pass --live in a repo "
-            f"whose committed {INTENT} says `live: true` (see docs/apply.md)"
-        )
-    reasons = live_refusals(repo, recovering)
-    if reasons:
-        raise EngineError("live apply refused: " + "; ".join(reasons))
+            f"{repo} is outside {SANDBOX_ENV}={sandbox}; refusing to write "
+            f"(unset {SANDBOX_ENV} to write here)"
+        ) from None
 
 
 def _yaml() -> YAML:
@@ -182,10 +171,11 @@ def _yaml() -> YAML:
 
 
 def read_intent(repo: Path) -> dict[str, Any]:
-    path = repo / INTENT
+    path = repo / intent_path(repo)
     if not path.exists():
         return {"schema_version": 1, "loadouts": [], "harnesses": list(DEFAULT_HARNESSES)}
     data = YAML(typ="safe", pure=True).load(path.read_text(encoding="utf-8")) or {}
+    # `live` was the earlier opt-in to write outside the sandbox; still read, no longer needed.
     keys = {"schema_version", "loadouts", "harnesses", "live"}
     if not isinstance(data, dict) or set(data) - keys:
         raise EngineError(f"{path}: expected schema_version, loadouts, harnesses and live only")
@@ -207,7 +197,7 @@ def read_intent(repo: Path) -> dict[str, Any]:
 
 def render_intent(repo: Path, intent: dict[str, Any]) -> bytes | None:
     """kit.yaml bytes for an intent, keeping comments of an existing file."""
-    path = repo / INTENT
+    path = repo / intent_path(repo)
     if not intent["loadouts"] and not path.exists():
         return None
     yaml = _yaml()
@@ -249,7 +239,7 @@ def empty_ledger() -> dict[str, Any]:
 
 
 def read_ledger(repo: Path) -> dict[str, Any]:
-    path = repo / LEDGER
+    path = repo / ledger_path(repo)
     if not path.exists():
         return empty_ledger()
     try:
@@ -291,14 +281,82 @@ class Desired:
     conflicts: list[str] = field(default_factory=list)
 
 
-def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
+def _expand_directories(
+    warehouse: Path, effects: list[dict[str, Any]], conflicts: list[str]
+) -> list[dict[str, Any]]:
+    """A skill directory becomes one whole file per asset, each owned by path like a generated
+    rule file, so `off` removes exactly what Kit copied and drift shows per file."""
+    out = []
+    for effect in effects:
+        if effect["format"] != "directory":
+            out.append(effect)
+            continue
+        kind, _, name = effect["source"].partition(":")
+        root = warehouse / "primitives" / f"{kind}s" / PurePosixPath(name)
+        if not root.is_dir() or not (root / "SKILL.md").is_file():
+            conflicts.append(
+                f"{effect['source']}: no skill directory with a SKILL.md in the warehouse"
+            )
+            continue
+        for path in sorted(p for p in root.rglob("*") if p.is_file() or p.is_symlink()):
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                conflicts.append(f"{effect['source']}: {rel} is a symlink; Kit copies files only")
+                continue
+            try:
+                # Owned whole files are LF, like the content hash; a CRLF checkout of the
+                # warehouse must not read as drift on every apply.
+                text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
+            except UnicodeDecodeError:
+                conflicts.append(f"{effect['source']}: {rel} is not UTF-8 text; copy it by hand")
+                continue
+            out.append(
+                {
+                    **effect,
+                    "target": f"{effect['target']}{rel}",
+                    "format": "file",
+                    "key": effect["source"],
+                    "value": text,
+                }
+            )
+    return out
+
+
+def _user_targets() -> tuple[dict[str, str], dict[str, str]]:
+    """Prefix map for user scope: .claude/ and .codex/ move with CLAUDE_CONFIG_DIR and
+    CODEX_HOME, but only to a folder under home other than Kit's own .kit/. A bad value is
+    a problem only for the effects that would use it (prefix -> problem)."""
+    home = Path.home().resolve()
+    prefixes: dict[str, str] = {}
+    problems: dict[str, str] = {}
+    for prefix, env in ((".claude/", "CLAUDE_CONFIG_DIR"), (".codex/", "CODEX_HOME")):
+        value = os.environ.get(env)
+        if not value:
+            continue
+        try:
+            rel = Path(value).expanduser().resolve().relative_to(home).as_posix()
+        except ValueError:
+            problems[prefix] = f"{env}={value} is outside home; user scope writes only under home"
+            continue
+        if rel == "." or rel == STATE or rel.startswith(f"{STATE}/"):
+            problems[prefix] = f"{env}={value} must name a folder under home, not home or {STATE}/"
+            continue
+        prefixes[prefix] = f"{rel}/"
+    return prefixes, problems
+
+
+def desired_state(warehouse: Path, intent: dict[str, Any], user: bool = False) -> Desired:
     result = Desired()
+    prefixes: dict[str, str] = {}
+    problems: dict[str, str] = {}
+    if user:
+        prefixes, problems = _user_targets()
     for target in intent["loadouts"]:
         name, profile = split_target(target)
         owner = {"loadout": name, "profile": profile}
         for harness in intent["harnesses"]:
             try:
-                plan = resolve(warehouse, target, harness)
+                plan = resolve(warehouse, target, harness, scope="user" if user else "project")
             except ModelError as error:
                 raise EngineError(f"{target} ({harness}): {error}") from error
             effects = list(plan["effects"])
@@ -312,12 +370,14 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
                         "value": block["text"],
                     }
                 )
-            for effect in effects:
-                if effect["format"] == "directory":
-                    result.conflicts.append(
-                        f"{effect['source']}: copying skill directories is not generated yet"
-                    )
+            for effect in _expand_directories(warehouse, effects, result.conflicts):
+                bad = [p for prefix, p in problems.items() if effect["target"].startswith(prefix)]
+                if bad:
+                    result.conflicts.extend(c for c in bad if c not in result.conflicts)
                     continue
+                for old, new in prefixes.items():
+                    if effect["target"].startswith(old):
+                        effect = {**effect, "target": new + effect["target"][len(old) :]}
                 if "${plugin:" in _canonical(effect["value"]):
                     result.conflicts.append(
                         f"{effect.get('source', effect['target'])} ({harness}): needs the "
@@ -352,6 +412,53 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
     return result
 
 
+# Setup -------------------------------------------------------------------------------------------
+
+PLUGIN_REF = re.compile(r"\$\{plugin:([A-Za-z0-9._-]+)\}")
+
+
+def _installed_plugin_paths(home: Path) -> dict[str, str]:
+    """Plugin name -> install path, from Claude Code's installed_plugins.json."""
+    from kitctl.native import read_native
+
+    paths: dict[str, str] = {}
+    for item in read_native(home.expanduser().resolve(), home)["installed_plugins"]:
+        name = str(item.get("id", "")).split("@", 1)[0]
+        if item.get("path") and name not in paths:
+            paths[name] = str(item["path"])
+    return paths
+
+
+def setup_runs(
+    repo: Path, steps: list[dict[str, Any]], home: Path | None = None
+) -> list[dict[str, Any]]:
+    """Each setup step ready to run (`argv`), or why it is skipped (`skip`). Reads only.
+
+    A step's `when: file-exists:PATH` is checked in the project, and `${plugin:NAME}` becomes
+    the installed plugin's directory. Setup outputs are the tool's, never Kit-owned.
+    """
+    installed: dict[str, str] | None = None
+    runs: list[dict[str, Any]] = []
+    for step in steps:
+        when = str(step.get("when") or "")
+        if when.startswith("file-exists:") and not (repo / PurePosixPath(when[12:])).exists():
+            runs.append({"step": step, "argv": None, "skip": f"{when[12:]} not found"})
+            continue
+        argv: list[str] = []
+        skip: str | None = None
+        for part in step["run"]:
+            for name in PLUGIN_REF.findall(str(part)):
+                if installed is None:
+                    installed = _installed_plugin_paths(home or Path.home())
+                if name not in installed:
+                    skip = f"plugin {name} is not installed (Claude Code); install it, then re-run"
+                    break
+                part = str(part).replace(f"${{plugin:{name}}}", installed[name])
+            argv.append(str(part))
+        runs.append({"step": step, "argv": None if skip else argv, "skip": skip})
+    return runs
+
+
 # Files -------------------------------------------------------------------------------------------
 
 
@@ -369,6 +476,7 @@ class Doc:
         self.fmt = fmt
         self.path = repo / PurePosixPath(target)
         self.conflict: str | None = None
+        self.cleared = False
         if self.path.is_symlink() or any(
             p.is_symlink() for p in self.path.parents if p.is_relative_to(repo) and p != repo
         ):
@@ -406,9 +514,12 @@ class Doc:
                 return value if current is not MISSING and value in current else MISSING
             return current
         if self.fmt == "toml":
-            return formats.toml_get(self.doc, key)
+            return formats.toml_get(self.doc, key, value)
         if self.fmt == "file":
-            return MISSING if self.before is None else self.text.replace("\r\n", "\n")
+            # A whole file Kit just took back reads as absent, so an update re-inserts it.
+            if self.before is None or self.cleared:
+                return MISSING
+            return self.text.replace("\r\n", "\n")
         return formats.block_get(self.text, key)
 
     def insert(self, key: str, value: Any) -> tuple[list[str], dict[str, Any]]:
@@ -419,7 +530,8 @@ class Doc:
         if self.fmt == "toml":
             return formats.toml_set(self.doc, key, value), {}
         if self.fmt == "file":
-            self.text = value  # only reached when the file is absent: Kit never overwrites one
+            self.text = value  # only when absent or just taken back: Kit never overwrites one
+            self.cleared = False
             return [], {}
         self.text, separator = formats.block_insert(self.text, key, value)
         return [], {"separator": separator}
@@ -434,9 +546,10 @@ class Doc:
         if self.fmt == "json":
             formats.json_delete(self.doc, entry["key"], entry["value"], created)
         elif self.fmt == "toml":
-            formats.toml_delete(self.doc, entry["key"], created)
+            formats.toml_delete(self.doc, entry["key"], created, entry["value"])
         elif self.fmt == "file":
             self.text = ""  # empty: deleted below because Kit created it
+            self.cleared = True
         else:
             self.text = formats.block_remove(self.text, entry["key"], entry.get("separator", ""))
 
@@ -519,7 +632,7 @@ def make_plan(repo: Path, warehouse: Path, intent: dict[str, Any]) -> Plan:
     if (repo / JOURNAL).exists():
         raise EngineError("an earlier apply was interrupted; run `kitctl apply` to recover first")
     ledger = read_ledger(repo)
-    desired = desired_state(warehouse, intent)
+    desired = desired_state(warehouse, intent, is_user_scope(repo))
     conflicts = list(desired.conflicts)
     owned = {entry_id(e): e for e in ledger["entries"]}
     docs: dict[str, Doc] = {}
@@ -662,16 +775,17 @@ def make_plan(repo: Path, warehouse: Path, intent: dict[str, Any]) -> Plan:
         "created_files": sorted(created_files),
         "created_parents": created_parents,
         "created_dirs": sorted(created_dirs),
-        "kit_yaml_created": ledger.get("kit_yaml_created", not (repo / INTENT).exists()),
+        "kit_yaml_created": ledger.get("kit_yaml_created", not (repo / intent_path(repo)).exists()),
     }
-    lock_before = (repo / LEDGER).read_bytes() if (repo / LEDGER).exists() else None
-    intent_before = (repo / INTENT).read_bytes() if (repo / INTENT).exists() else None
+    ledger_rel, intent_rel = ledger_path(repo), intent_path(repo)
+    lock_before = (repo / ledger_rel).read_bytes() if (repo / ledger_rel).exists() else None
+    intent_before = (repo / intent_rel).read_bytes() if (repo / intent_rel).exists() else None
     if intent["loadouts"]:
-        files[LEDGER] = (lock_before, render_ledger(body, commit))
-        files[INTENT] = (intent_before, render_intent(repo, intent))
+        files[ledger_rel] = (lock_before, render_ledger(body, commit))
+        files[intent_rel] = (intent_before, render_intent(repo, intent))
     else:
-        files[LEDGER] = (lock_before, None)
-        files[INTENT] = (
+        files[ledger_rel] = (lock_before, None)
+        files[intent_rel] = (
             intent_before,
             None if body["kit_yaml_created"] else render_intent(repo, intent),
         )
@@ -775,6 +889,25 @@ def _commit_files(repo: Path, journal: dict[str, Any]) -> None:
             os.replace(staged, path)
 
 
+def _clear_state(repo: Path) -> None:
+    """Drop Kit's state. A project's .kit/ is Kit's alone; ~/.kit may hold other tools'
+    files, so in user scope only Kit's own files go, and the folder only if it is empty."""
+    state = repo / STATE
+    if not is_user_scope(repo):
+        shutil.rmtree(state, ignore_errors=True)
+        return
+    for rel in (JOURNAL, LOCKFILE, USER_INTENT, USER_LEDGER):
+        with contextlib.suppress(FileNotFoundError):
+            (repo / rel).unlink()
+    shutil.rmtree(repo / PREIMAGES, ignore_errors=True)
+    ignore = state / ".gitignore"
+    with contextlib.suppress(OSError):
+        if ignore.read_text(encoding="utf-8") == "*\n":
+            ignore.unlink()
+    with contextlib.suppress(OSError):
+        state.rmdir()
+
+
 def _finish(repo: Path, journal: dict[str, Any]) -> None:
     for directory in journal["remove_dirs"]:
         with contextlib.suppress(OSError):
@@ -784,15 +917,15 @@ def _finish(repo: Path, journal: dict[str, Any]) -> None:
             _preimage_path(repo, target).unlink()
     (repo / JOURNAL).unlink()
     if journal["clear_state"]:
-        shutil.rmtree(repo / STATE, ignore_errors=True)
+        _clear_state(repo)
 
 
-def recover(repo: Path, live: bool = False) -> bool:
+def recover(repo: Path) -> bool:
     """Roll an interrupted apply forward. Returns True if there was something to recover."""
     path = repo / JOURNAL
     if not path.exists():
         return False
-    check_write_allowed(repo, live, recovering=True)
+    check_write_allowed(repo)
     journal = json.loads(path.read_text(encoding="utf-8"))
     with project_lock(repo):
         _commit_files(repo, journal)
@@ -800,12 +933,12 @@ def recover(repo: Path, live: bool = False) -> bool:
     return True
 
 
-def apply_plan(plan: Plan, live: bool = False) -> list[str]:
+def apply_plan(plan: Plan) -> list[str]:
     """Write a plan. Returns the targets written. Raises without writing on conflicts."""
     repo = plan.repo
     if not plan.changes and not plan.remove_dirs and not plan.conflicts:
         return []  # nothing to write needs no permission (as after a recovery)
-    check_write_allowed(repo, live)
+    check_write_allowed(repo)
     if plan.conflicts:
         raise ConflictError(plan.conflicts)
     changes = plan.changes
@@ -856,7 +989,9 @@ def apply_plan(plan: Plan, live: bool = False) -> list[str]:
             "files": files,
             "remove_dirs": plan.remove_dirs,
             "drop_preimages": [t for t in changes if t not in still],
-            "clear_state": not plan.intent["loadouts"],
+            # In user scope the intent lives in .kit/; keep the folder if Kit did not create it.
+            "clear_state": not plan.intent["loadouts"]
+            and not (is_user_scope(repo) and not plan.ledger.get("kit_yaml_created", True)),
         }
         _write_atomic(repo / JOURNAL, json.dumps(journal, indent=2).encode())
         _commit_files(repo, journal)
@@ -919,7 +1054,9 @@ def status(repo: Path, warehouse: Path) -> dict[str, Any]:
     for target in intent["loadouts"]:
         for harness in intent["harnesses"]:
             try:
-                plan = resolve(warehouse, target, harness)
+                plan = resolve(
+                    warehouse, target, harness, scope="user" if is_user_scope(repo) else "project"
+                )
             except ModelError as error:
                 report.setdefault("errors", []).append(f"{target} ({harness}): {error}")
                 continue
@@ -933,9 +1070,9 @@ def status(repo: Path, warehouse: Path) -> dict[str, Any]:
     return report
 
 
-def eject(repo: Path, live: bool = False) -> list[str]:
+def eject(repo: Path) -> list[str]:
     """Keep native config as plain files; drop Kit's markers, ledger, intent and state."""
-    check_write_allowed(repo, live)
+    check_write_allowed(repo)
     if (repo / JOURNAL).exists():
         raise EngineError("an earlier apply was interrupted; run `kitctl apply` to recover first")
     ledger = read_ledger(repo)
@@ -961,9 +1098,9 @@ def eject(repo: Path, live: bool = False) -> list[str]:
                     text = formats.strip_markers(text, name)
             _write_atomic(path, text.encode("utf-8"))
             touched.append(target)
-        for name in (LEDGER, INTENT):
+        for name in (ledger_path(repo), intent_path(repo)):
             if (repo / name).exists():
                 (repo / name).unlink()
                 touched.append(name)
-    shutil.rmtree(repo / STATE, ignore_errors=True)
+    _clear_state(repo)
     return touched

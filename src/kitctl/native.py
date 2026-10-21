@@ -239,6 +239,7 @@ class Reader:
                             "project": install.get("projectPath"),
                             "version": install.get("version"),
                             "sha": install.get("gitCommitSha"),
+                            "path": install.get("installPath"),
                         }
                     )
 

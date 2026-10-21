@@ -1,34 +1,37 @@
 # Kit (`kitctl`)
 
-Kit inventories the skills, MCP configuration, hooks, and plugins used by coding
-agents (Claude Code, Codex and, documented but not yet verified, Cursor). The planned compiler manages named **loadouts** from a separate private
-warehouse and writes each harness's native configuration with an ownership ledger.
-The planned default warehouse location is `~/kits`; setup will ask which parent
-directories contain your repositories.
+Kit manages the skills, MCP servers, hooks, plugins and instruction blocks your coding
+agents (Claude Code, Codex and, documented but not yet verified, Cursor) load. You keep
+named **loadouts** in a warehouse (`~/kits` by default); kitctl writes each harness's own
+config for them in a project or in your home, with an ownership ledger so `kitctl off`
+puts back exactly what was there.
 
-**0.0.1 is an early, read-only release.** It discovers skill folders and known
-configuration files in explicitly selected roots, computes SHA-256 hashes, and
-prints text or JSON. It does not yet parse connectors, count usage, compile
-loadouts, reconcile changes, or modify agent configuration.
+**0.1.0** can:
+- start a warehouse (`kitctl init`), check it (`validate`) and show what a loadout means
+  per harness, with every capability gap and its remedy (`resolve`);
+- check a loadout against what is actually installed (`doctor`, read-only);
+- apply loadouts to a project or to your home (`--user`): `use`, `off`, `apply`,
+  `status`, `eject`, each showing its plan and asking before it writes;
+- copy warehouse skill folders and run a loadout's setup steps (after asking).
+
+Kit never writes trust: approving hooks, MCP servers and projects stays with you.
 
 ## Run
 
 Python 3.11+:
 
 ```sh
-# From a checkout (works before the PyPI release):
-uv run kitctl --version
-uv run kitctl inventory --root /path/to/repo --json
+uv tool install kitctl          # or: uvx kitctl --version
+kitctl init && kitctl validate
+kitctl use starter --repo path/to/repo
 
-# After publication to PyPI:
-uvx kitctl --version
-uv tool install kitctl
+# From a checkout:
+uv run kitctl --version
 ```
 
 Node 20+ with [uv installed](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```sh
-# After publication to npm:
 npx kitctl --version
 npx kitctl inventory --root /path/to/repo --json
 ```
@@ -36,6 +39,14 @@ npx kitctl inventory --root /path/to/repo --json
 The npm package is a thin launcher around the bundled Python wheel from the same
 release. It uses `uvx` with that local wheel; it does not require a PyPI release,
 run install scripts, or ship a `kit` binary. uv manages Python if needed.
+
+Start a warehouse of your own (`~/kits`, or `KIT_WAREHOUSE`), with a `starter` loadout
+that only adds an instruction block:
+
+```sh
+uv run kitctl init
+uv run kitctl validate
+```
 
 Loadouts (read-only; nothing is written):
 
@@ -54,14 +65,16 @@ uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
 ```
 
 `use`, `off`, `plan`, `apply`, `status` and `eject` manage a project's native
-config through an ownership ledger. They write inside `$KITCTL_SANDBOX`, or in a
-real repository only with `--live` and that repository's committed opt-in (see
-[apply](docs/apply.md#live-apply)):
+config through an ownership ledger. They show the plan and ask before writing
+(`--yes` skips the question), and `kitctl off` restores the original bytes (see
+[apply](docs/apply.md#writing)):
 
 ```sh
-export KITCTL_SANDBOX=/tmp/kit-sandbox
-uv run kitctl use brand-studio --repo /tmp/kit-sandbox/site --dry-run
-uv run kitctl use brand-studio --repo path/to/repo --live --yes  # after the opt-in
+uv run kitctl use brand-studio --repo path/to/repo --dry-run   # the plan only
+uv run kitctl use brand-studio --repo path/to/repo             # the plan, then [y/N]
+uv run kitctl off brand-studio --repo path/to/repo             # the undo
+uv run kitctl use core --user                                   # ~/.claude, ~/.codex, ~/.agents
+KITCTL_SANDBOX=/tmp/kit-sandbox uv run kitctl ...               # confine writes to one directory
 ```
 
 `resolve` prints the effective native config a loadout would produce and every

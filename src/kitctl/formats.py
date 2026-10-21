@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import tomlkit
-from tomlkit.items import Comment, Table
+from tomlkit.exceptions import TOMLKitError
+from tomlkit.items import AoT, Comment, Table
 
 MISSING: Any = object()
 
@@ -164,7 +165,31 @@ def _plain(value: Any) -> Any:
     return value.unwrap() if hasattr(value, "unwrap") else value
 
 
-def toml_get(doc: tomlkit.TOMLDocument, key: str) -> Any:
+def _tomlkit_errors(function: Any) -> Any:
+    """tomlkit cannot edit some valid TOML (an array of tables split around other tables);
+    say what to change instead of crashing."""
+
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return function(*args, **kwargs)
+        except TOMLKitError as error:
+            raise FormatError(
+                f"cannot edit this TOML safely ({error}); keep each [[array]] of tables in "
+                "one run, then re-run"
+            ) from error
+
+    return wrapped
+
+
+@_tomlkit_errors
+def toml_get(doc: tomlkit.TOMLDocument, key: str, value: Any = None) -> Any:
+    """A key's value. `a.b/-` names one table in the array of tables `[[a.b]]`: the one
+    equal to `value`, like a JSON `/-` pointer."""
+    if key.endswith("/-"):
+        tables = toml_get(doc, key[:-2])
+        if not isinstance(tables, list):
+            return MISSING
+        return value if any(t == value for t in tables) else MISSING
     node: Any = doc
     for part in toml_key(key):
         if not hasattr(node, "get") or part not in node:
@@ -180,13 +205,15 @@ def _table(value: dict[str, Any]) -> Table:
     return table
 
 
+@_tomlkit_errors
 def toml_set(doc: tomlkit.TOMLDocument, key: str, value: Any) -> list[str]:
-    parts = toml_key(key)
+    append = key.endswith("/-")
+    parts = toml_key(key[:-2] if append else key)
     created: list[str] = []
     node: Any = doc
     for depth, part in enumerate(parts[:-1]):
         if part not in node:
-            holds_scalar = depth == len(parts) - 2 and not isinstance(value, dict)
+            holds_scalar = depth == len(parts) - 2 and not isinstance(value, dict) and not append
             # Tables that only hold tables stay implicit, so no empty [header] lines appear.
             node.add(part, tomlkit.table(is_super_table=not holds_scalar))
             created.append(toml_join(parts[: depth + 1]))
@@ -194,6 +221,16 @@ def toml_set(doc: tomlkit.TOMLDocument, key: str, value: Any) -> list[str]:
         if not isinstance(node, Table | tomlkit.TOMLDocument):
             raise FormatError(f"{'.'.join(parts[: depth + 1])} is not a table")
     last = parts[-1]
+    if append:
+        if last not in node:
+            node.add(last, tomlkit.aot())
+            created.append(toml_join(parts))
+        tables = node[last]
+        if not isinstance(tables, AoT):
+            raise FormatError(f"{toml_join(parts)} is not an array of tables")
+        if not any(_plain(t) == value for t in tables):
+            tables.append(_table(value))
+        return created
     node[last] = _table(value) if isinstance(value, dict) else value
     return created
 
@@ -206,9 +243,31 @@ def _has_comment(item: Any) -> bool:
     return False
 
 
-def toml_delete(doc: tomlkit.TOMLDocument, key: str, created: list[str]) -> None:
+@_tomlkit_errors
+def toml_delete(doc: tomlkit.TOMLDocument, key: str, created: list[str], value: Any = None) -> None:
+    if key.endswith("/-"):
+        parts = toml_key(key[:-2])
+        chain: list[Any] = [doc]
+        for part in parts:
+            chain.append(chain[-1][part])
+        tables = chain[-1]
+        for index, table in enumerate(tables):
+            if _plain(table) == value:
+                # tomlkit keeps a comment written before the next header inside this table.
+                if _has_comment(table):
+                    raise FormatError(
+                        f"a comment sits inside a Kit-owned [[{toml_join(parts)}]] table; "
+                        "move it, then re-run"
+                    )
+                del tables[index]
+                break
+        if len(tables) or toml_join(parts) not in created:
+            return
+        del chain[-2][parts[-1]]
+        _drop_created(chain[:-1], parts[:-1], created)
+        return
     parts = toml_key(key)
-    chain: list[Any] = [doc]
+    chain = [doc]
     for part in parts[:-1]:
         chain.append(chain[-1][part])
     # tomlkit keeps a comment written before the next [header] inside the previous table;
@@ -216,6 +275,12 @@ def toml_delete(doc: tomlkit.TOMLDocument, key: str, created: list[str]) -> None
     if _has_comment(chain[-1].item(parts[-1]) if hasattr(chain[-1], "item") else None):
         raise FormatError(f"a comment sits inside Kit-owned {key}; move it, then re-run")
     del chain[-1][parts[-1]]
+    _drop_created(chain, parts[:-1], created)
+
+
+def _drop_created(chain: list[Any], parents: list[str], created: list[str]) -> None:
+    """Remove tables Kit created, innermost first, while they are empty."""
+    parts = [*parents, ""]
     for depth in range(len(parts) - 1, 0, -1):
         if toml_join(parts[:depth]) in created and len(chain[depth]) == 0:
             if _has_comment(chain[depth]):

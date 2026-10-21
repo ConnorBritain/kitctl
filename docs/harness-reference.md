@@ -215,7 +215,8 @@ throwaway config. These facts supersede the "documented" entries above.
   "installed, enabled 0.3.1". No separate `codex plugin add` is needed.
 - **verified**: `[[skills.config]] name = "…" enabled = false` in a trusted
   project's config is **ignored**: `codex debug prompt-input` still lists the skill.
-  The same entry in user config removes it. Single-skill disables need user scope.
+  The same entry in user config removes it. Single-skill disables need user scope, which
+  `kitctl use <loadout> --user` writes as owned `[[skills.config]]` tables.
 - **verified**: `[mcp_servers.<id>]` in a trusted project's config is listed and
   enabled by `codex mcp list`.
 
@@ -255,7 +256,7 @@ so anything attributed to them below is recalled, not re-read.
 | `plugin_hooks` | plugin `hook_provides` slots count | documented | Plugins ship `hooks/hooks.json`, with commands using `${CURSOR_PLUGIN_ROOT}`. |
 | `plugin_enable`, `plugin_disable` | `manual-step` / `unsupported` gaps | documented (absence) | Plugins are installed from the Cursor marketplace. No project file that enables or disables one is documented, and the clone has only plugin-side manifests. |
 | `marketplace_file`, `marketplace_sha_pin` | `manual-step` gap | documented (absence) | A marketplace is `.cursor-plugin/marketplace.json` inside its own repo (`schemas/marketplace.schema.json`). No project file registers one, and no commit pin is documented. |
-| `skill_dir` | `.cursor/skills/<name>/` (Kit does not copy skill directories on any harness yet; the engine reports it) | documented | [cursor/cookbook](https://github.com/cursor/cookbook) at `6733ef8`, `hooks/README.md`: `update-skills-on-stop.mjs` maintains `.cursor/skills/*/SKILL.md`. |
+| `skill_dir` | `.cursor/skills/<name>/` (Kit copies a warehouse skill directory there, one owned file per asset) | documented | [cursor/cookbook](https://github.com/cursor/cookbook) at `6733ef8`, `hooks/README.md`: `update-skills-on-stop.mjs` maintains `.cursor/skills/*/SKILL.md`. |
 | `skill_disable` | `unsupported` gap | documented (absence) | No per-skill switch is documented. |
 | `hooks_trust_required` | `trust-required` gap on every Cursor hook | documented | cursor/cookbook `6733ef8` `hooks/README.md`: "Trusted workspaces automatically load project hooks from `.cursor/hooks.json`." |
 | `project_trust_required` | `unverified` gap, including a loadout that writes only the rule file | unknown | No source says whether Cursor gates the other `.cursor/` files on workspace trust. Kit claims no trust step, flags that as unverified, and the first sandbox probe has to settle it. |

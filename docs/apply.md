@@ -1,14 +1,14 @@
 # Plan, apply and removal (M3)
 
-Status 2026-10-21: proven in sandbox tests. Live apply is authorized by the
-owner as an explicit opt-in per repository (see [Live apply](#live-apply)).
-Every other write refuses unless the project is inside `$KITCTL_SANDBOX`.
+Status 2026-10-21: writes go wherever you point them, after Kit shows the plan and
+you confirm (see [Writing](#writing)). `$KITCTL_SANDBOX`, when set, confines every write
+to one directory.
 
 ## Files in a project
 
 | File | Role | Committed? |
 |---|---|---|
-| `kit.yaml` | Intent: `loadouts` (`name` or `name:profile`, one profile per loadout), `harnesses` (`claude`, `codex`, `cursor`; default `[claude, codex]`) and the optional `live: true` opt-in | yes |
+| `kit.yaml` | Intent: `loadouts` (`name` or `name:profile`, one profile per loadout), `harnesses` (`claude`, `codex`, `cursor`; default `[claude, codex]`) (a `live: true` from the earlier opt-in is read and ignored) | yes |
 | `kit.lock` | Ledger: every owned entry with its owners (loadout and profile), the parents and files Kit created, and the warehouse commit. A checksum detects hand edits. | yes |
 | `.kit/` | Local recovery state: `lock`, `journal.json`, and `preimages/` (original bytes of files Kit edits). It contains its own `.gitignore` (`*`). | no |
 
@@ -28,47 +28,75 @@ kitctl status                          # loadouts, owned entries (ok/drift/missi
 kitctl eject --yes                     # keep native files, drop kit.yaml, kit.lock, .kit/ and markers
 ```
 
-## Live apply
+## Writing
 
-A write lands in a real repository only when every one of these holds, and
-kitctl names each one that does not:
+`use`, `off`, `apply` and `eject` print the plan, then ask `Write N files? [y/N]` on a
+terminal. `--yes` skips the question (scripts, CI); without a terminal and without
+`--yes`, nothing is written. `--dry-run` shows the plan and never asks.
 
-1. `--live` is on the command line (`use`, `off`, `apply`, `eject`).
-2. The **committed** `kit.yaml` says `live: true`. The opt-in is read from
-   `git show HEAD:./kit.yaml`, so editing the working copy is not enough: the
-   owner commits the decision.
-3. No tracked file has uncommitted changes, so each apply is its own reviewable
-   commit and none of the owner's work is mixed into it. Untracked files do not
-   count. Files git does not track (`.mcp.json` when ignored, say) are restored
-   by `kitctl off` from `.kit/preimages`, not by git. The one exception is
-   recovering an interrupted apply, and only when every uncommitted file is
-   one its journal names.
-4. HEAD is a named branch other than `main`, `master` and the remote's
-   default (`origin/HEAD`).
+The undo is `kitctl off <loadout>`: it removes only that loadout's entries and restores
+the original bytes from `.kit/preimages`, with or without git. Before writing, Kit warns
+(and never refuses) when:
 
-The opt-in records the owner's decision; it is not a lock. Anyone who can
-commit to the repository, an agent with a shell included, can commit
-`live: true`. Review that commit like any other.
+- the directory is not a git repository (`off` is then the only undo);
+- tracked files have uncommitted changes (Kit's edits will mix with them);
+- HEAD is on `main`, `master` or the remote's default branch (a branch lets the change be
+  reviewed before it lands).
 
-`plan`, `status` and `--dry-run` read only and never need the opt-in. A
-sandbox is unchanged: inside `$KITCTL_SANDBOX` no opt-in is needed. Never point
-`KITCTL_SANDBOX` at a real repository to get past these checks.
+When `$KITCTL_SANDBOX` is set, every write must land inside it, so a test run or a first
+try cannot touch anything else. `--live` and `live: true` from the earlier opt-in are accepted and do
+nothing.
 
 ```sh
-git switch -c kit/first-apply
-kitctl use gestalt-flow --dry-run               # review the diff
-# add `live: true` to kit.yaml (create it with `schema_version: 1` if absent)
-git add kit.yaml && git commit -m "kit: opt in to live apply"
-kitctl use gestalt-flow --live --yes
+git switch -c kit/first-apply                   # optional; Kit warns on main
+kitctl use gestalt-flow --dry-run               # the plan, nothing written
+kitctl use gestalt-flow                         # the plan, then [y/N]
 kitctl status                                   # every owned entry should read ok
-git add -A && git commit -m "kit: gestalt-flow" # the next live write needs a clean tree
-kitctl off gestalt-flow --live --yes            # the undo; restores the original bytes
+kitctl off gestalt-flow                         # the undo; restores the original bytes
 ```
 
-Live apply still writes project files only. User-scope (`~/`) targets, setup
-steps and skill directories are not generated; they stay gaps with remedies.
+## User scope
 
-Every write takes `--dry-run`. Without `--yes`, nothing is written.
+`--user` (the same as `--repo ~`) applies a loadout to your home instead of a project:
+every session on the machine sees it, so Kit warns before writing. Intent and ledger live
+in `~/.kit/kit.yaml` and `~/.kit/kit.lock`; `kitctl off <loadout> --user` restores the
+original bytes like it does in a project.
+
+| Project target | User target |
+|---|---|
+| `.claude/settings.json`, `.claude/skills/<n>/` | `~/.claude/…` (or `$CLAUDE_CONFIG_DIR/…`) |
+| `CLAUDE.md` block | `~/.claude/CLAUDE.md` |
+| `.codex/config.toml`, `.codex/hooks.json` | `~/.codex/…` (or `$CODEX_HOME/…`) |
+| `AGENTS.md` block | `~/.codex/AGENTS.md` |
+| `.agents/skills/<n>/`, `.cursor/mcp.json`, `.cursor/hooks.json` | `~/.agents/…`, `~/.cursor/…` |
+| `.mcp.json` (Claude MCP) | a gap whose remedy is the `claude mcp add --scope user …` command: user servers live in `~/.claude.json`, which Claude Code rewrites all the time, so Kit does not own it |
+| `.cursor/rules/kit-<loadout>.mdc`, `.cursor/skills/` | gaps: Cursor keeps user rules in its settings |
+
+Codex reads single-skill disables only from user config, so in user scope a disabled skill
+becomes one `[[skills.config]]` table (`name`, `enabled = false`) Kit owns by value; your
+own tables stay. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` move the targets, but only within
+home; one pointing elsewhere is a conflict. Setup steps are listed, not run: they belong to
+projects. Project trust gaps do not apply.
+
+Kit does not write through symlinks, so a `~/.claude` or `~/.codex` linked from a dotfiles
+repository (stow and the like) is refused; point `CLAUDE_CONFIG_DIR` / `CODEX_HOME` at the
+real folder under home instead. Kit removes only its own files from `~/.kit/`, and a
+comment inside a `[[skills.config]]` table Kit owns blocks `off` until you move it.
+
+**Skills.** A skill primitive with a directory (`primitives/skills/<name>/` with a
+`SKILL.md`) is copied to `.claude/skills/<name>/` and `.agents/skills/<name>/`
+(`.cursor/skills/` for Cursor), one owned file per asset. A changed skill in the warehouse
+updates the copy; `off` removes it. An existing file Kit did not write, a symlink, or a
+non-UTF-8 asset is a conflict. External skills (`external: true`) are not copied.
+
+**Setup steps.** After `kitctl use` writes a loadout's config, it lists the loadout's
+`setup` steps and asks `Run N setup step(s)? [y/N]` (`--yes` runs them). A step whose
+`when: file-exists:PATH` is missing is skipped with the reason, and `${plugin:NAME}` becomes
+the installed Claude Code plugin's directory (skipped when the plugin is not installed).
+Steps run in the project with no shell; their outputs belong to the tool, so `off` leaves
+them. `kitctl use <loadout>` again re-runs them; `apply` only lists them.
+
+Every write takes `--dry-run`. Without a terminal and without `--yes`, nothing is written.
 
 ## Generators
 
@@ -116,6 +144,5 @@ Cursor effect also comes with an `unverified` gap.
 - **Formatting.** JSON keeps indentation, key order, line endings and the final
   newline, but `json.dumps` expands compact arrays in files Kit edits. CRLF
   files stay CRLF.
-- **Not done yet.** `setup` steps are listed in the plan but not run. Skill
-  directory copies are not generated. User-scope (`~/`) targets are not
-  generated; brand-studio is entirely project-scoped.
+- **Not done yet.** User-scope (`~/`) targets are not generated; brand-studio is
+  entirely project-scoped.

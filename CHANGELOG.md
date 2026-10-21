@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 0.1.0 — not yet published (tag `v0.1.0`; see docs/publishing.md)
+
+Kit writes: loadouts apply to a project or to your home with a plan, a confirmation and a
+byte-for-byte undo.
+
+- User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
+  `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
+  `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME` within home. Intent and ledger live in `~/.kit/`.
+  Claude user MCP servers are a gap with the exact `claude mcp add --scope user` command
+  (owner decision: Kit does not write `~/.claude.json`); Cursor user rules are a gap.
+  Codex single-skill disables become owned `[[skills.config]]` tables (TOML arrays of
+  tables are now owned one table at a time, like JSON `/-` entries).
+- Skill directories: a warehouse skill with a directory and a `SKILL.md` is copied into
+  `.claude/skills/`, `.agents/skills/` (and `.cursor/skills/`), one owned whole file per
+  asset; updates follow the warehouse and `off` removes them. Symlinks, non-UTF-8 assets
+  and files Kit did not write are conflicts. Fix: an owned whole file (a skill file or a
+  Cursor rule file) whose content changes is now updated instead of reported unmanaged.
+- Setup steps: `kitctl use` asks to run the loadout's `setup` steps after writing
+  (`--yes` runs them), skipping a step whose `when` file is missing or whose
+  `${plugin:NAME}` is not installed (resolved from Claude Code's installed_plugins.json).
+  Outputs stay the tool's. A failed step makes `use` exit 1.
+- `kitctl init [PATH]` creates a starter warehouse (default `KIT_WAREHOUSE` or `~/kits`):
+  `loadouts/starter.yaml` (an instruction block and a `tool:git` check), empty
+  `primitives/<kind>/` folders, a README, and `git init` unless `--no-git`. It refuses a
+  non-empty directory.
+- Writes for everyone (owner decision, 2026-10-21): `use`, `off`, `apply` and `eject` write
+  wherever they are pointed after showing the plan and asking `[y/N]` on a terminal
+  (`--yes` skips it; with no terminal and no `--yes`, nothing is written). The undo is
+  `kitctl off`. A directory that is not a git repository, uncommitted tracked changes and a
+  default branch are warnings, not refusals. `$KITCTL_SANDBOX`, when set, still confines
+  every write. `--live` and `live: true` from the opt-in below are accepted and ignored.
 - Live apply, owner-authorized: outside `$KITCTL_SANDBOX`, `use`, `off`, `apply`
   and `eject` write only with `--live`, a committed `kit.yaml` that says
   `live: true`, no uncommitted tracked changes and a named branch other than
@@ -9,7 +41,7 @@
   uncommitted files only when its journal names every one. Each unmet condition
   is named; git runs without inherited `GIT_*` variables. `kit.yaml` accepts the
   `live` key and keeps CRLF line endings. A no-op apply writes nothing and needs
-  no permission. See docs/apply.md#live-apply.
+  no permission. Superseded by the entry above; see docs/apply.md#writing.
 - Cursor: project skills go to `.cursor/skills/<name>/` and doctor sees them there; every Cursor hook carries a `trust-required` gap (trusted workspaces load project hooks); a loadout that writes only the `.mdc` rule still gets the unverified trust gap. Source: cursor/cookbook@6733ef8.
 
 - Cursor is a third harness (`--harness cursor`, `harnesses: [cursor]` in kit.yaml).

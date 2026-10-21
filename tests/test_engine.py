@@ -1,4 +1,4 @@
-"""Sandbox acceptance for plan/apply/use/off/status/eject (design.md, before live apply)."""
+"""Acceptance for plan/apply/use/off/status/eject (design.md), run inside a sandbox."""
 
 import json
 import os
@@ -324,21 +324,20 @@ def test_symlinked_target_is_a_conflict(repo: Path, tmp_path: Path) -> None:
     assert any("symlink" in c for c in plan.conflicts)
 
 
-def test_writes_require_the_sandbox(
+def test_the_sandbox_confines_writes_when_set(
     repo: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     plan = engine.make_plan(
         repo, WAREHOUSE, engine.with_loadout(engine.read_intent(repo), "brand-studio")
     )
-    monkeypatch.delenv(engine.SANDBOX_ENV)
-    with pytest.raises(engine.EngineError, match="sandbox"):
-        engine.apply_plan(plan)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.setenv(engine.SANDBOX_ENV, str(elsewhere))
     with pytest.raises(engine.EngineError, match="outside"):
         engine.apply_plan(plan)
     assert not (repo / "kit.lock").exists()
+    monkeypatch.delenv(engine.SANDBOX_ENV)  # unset: writes go where the person points them
+    assert engine.apply_plan(plan)
 
 
 def test_cli_use_status_off(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
