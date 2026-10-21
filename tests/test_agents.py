@@ -264,3 +264,38 @@ def test_agents_are_not_copied_from_a_missing_directory(
     shutil.rmtree(agent_warehouse / "primitives/agents/reviewer")
     assert engine._expand_directories(agent_warehouse, [effect], conflicts) == []
     assert conflicts == ["agent:reviewer: no reviewer/claude.md in the warehouse"]
+
+
+def test_two_agents_with_the_same_last_segment_conflict(
+    project: Path, agent_warehouse: Path
+) -> None:
+    agents = agent_warehouse / "primitives/agents"
+    write(
+        agents / "acme" / "reviewer.yaml",
+        b"schema_version: 2\nkind: agent\nname: acme/reviewer\ndescription: Acme's.\n"
+        b"harnesses: [claude]\n",
+    )
+    write(agents / "acme" / "reviewer" / "claude.md", CLAUDE.replace(b"diff", b"change"))
+    write(
+        agent_warehouse / "loadouts/both.yaml",
+        b"schema_version: 2\nname: both\nagents: [agent:reviewer, agent:acme/reviewer]\n",
+    )
+    p = plan(project, agent_warehouse, target="both")
+    assert any(
+        ".claude/agents/reviewer.md: both" in c and "agent:acme/reviewer" in c for c in p.conflicts
+    )
+    with pytest.raises(engine.ConflictError):
+        engine.apply_plan(p)
+    assert not (project / ".claude/agents").exists()
+
+
+def test_a_folder_where_an_agent_file_goes_is_a_conflict_before_any_write(
+    project: Path, agent_warehouse: Path
+) -> None:
+    (project / ".claude/agents/reviewer.md").mkdir(parents=True)
+    baseline = files(project)
+    p = plan(project, agent_warehouse)
+    assert ".claude/agents/reviewer.md exists and is not a regular file" in p.conflicts
+    with pytest.raises(engine.ConflictError):
+        engine.apply_plan(p)
+    assert files(project) == baseline and not (project / ".kit/journal.json").exists()

@@ -240,3 +240,11 @@ def test_invalid_budget_is_rejected(warehouse: Path, budget: str) -> None:
     )
     with pytest.raises(ModelError):
         parse_loadout(warehouse, "bad")
+
+
+def test_doctor_reports_a_malformed_kit_yaml_and_goes_on(warehouse: Path, sandbox: Path) -> None:
+    write(sandbox / "kit.yaml", b"loadouts: [\n")
+    report = doctor(warehouse, [sandbox], "base", ("claude",), runner=no_tools)
+    intent = [f for f in report["findings"] if f["check"] == "intent"]
+    assert [f["severity"] for f in intent] == ["warning"]
+    assert report["harnesses"]["claude"]["listing_cost"]["skills"] == 2

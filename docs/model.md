@@ -87,7 +87,7 @@ the author; Kit copies the file and never converts one format into the other.
 | cursor | – | – | a gap: no Cursor agent location is verified |
 
 Each harness listed in `harnesses` needs its file (`harnesses: [claude]` needs only
-`claude.md`). `<name>` is the last segment of a namespaced name, so `acme/reviewer`
+`claude.md`; no `harnesses` means all three, so both files). `<name>` is the last segment of a namespaced name, so `acme/reviewer`
 lands as `reviewer.md`. A missing directory or file, TOML that does not parse, a missing
 Codex key, or a frontmatter `name` that differs from the file name is an `agent` problem
 in `kitctl validate`. Forge does not propose agents and `kitctl vendor` does not copy them.

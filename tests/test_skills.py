@@ -99,3 +99,16 @@ def test_a_skill_without_skill_md_or_with_binary_assets_is_a_conflict(
     assert any("not UTF-8" in c for c in plan(project, skill_warehouse).conflicts)
     shutil.rmtree(skill_warehouse / "primitives" / "skills" / "hello")
     assert any("no skill directory" in c for c in plan(project, skill_warehouse).conflicts)
+
+
+def test_a_git_folder_inside_a_skill_is_not_copied(project: Path, skill_warehouse: Path) -> None:
+    """A skill cloned in place keeps its .git; the hash ignores it, and so does the copy."""
+    git = skill_warehouse / "primitives" / "skills" / "hello" / ".git"
+    (git / "objects").mkdir(parents=True)
+    (git / "objects" / "ab").write_bytes(b"\x78\x9c\xff\x00")
+    (git / "HEAD").write_bytes(b"ref: refs/heads/main\n")
+    p = plan(project, skill_warehouse)
+    assert p.conflicts == []
+    engine.apply_plan(p)
+    assert (project / ".claude/skills/hello/SKILL.md").is_file()
+    assert not (project / ".claude/skills/hello/.git").exists()

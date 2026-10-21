@@ -26,6 +26,13 @@ byte-for-byte undo.
   or profile `budget: {tokens, skills}` turns an over-budget listing into a `budget`
   warning (never an error); the child layer or profile overrides its parent.
 
+- Fixes from reviewing this release: `eject` no longer refuses an instruction block (or a
+  skill or agent file) that merely mentions kitctl, which made the starter loadout
+  impossible to eject; a malformed `kit.yaml` is an error message instead of a traceback;
+  two whole files for one target (`acme/review` and `team/review` both landing as
+  `review`) are a conflict instead of one silently overwriting the other; a folder (or
+  other non-file) where Kit would write a file is a conflict at plan time instead of a
+  failure halfway through apply; a `.git` folder inside a warehouse skill is not copied.
 - User scope: `--user` (the same as `--repo ~`) on plan/apply/use/off/status/eject writes
   `~/.claude/settings.json`, `~/.claude/CLAUDE.md`, `~/.codex/config.toml`,
   `~/.codex/hooks.json`, `~/.codex/AGENTS.md` and user skill folders, honouring
