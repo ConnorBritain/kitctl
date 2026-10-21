@@ -254,6 +254,45 @@ class Desired:
     conflicts: list[str] = field(default_factory=list)
 
 
+def _expand_directories(
+    warehouse: Path, effects: list[dict[str, Any]], conflicts: list[str]
+) -> list[dict[str, Any]]:
+    """A skill directory becomes one whole file per asset, each owned by path like a generated
+    rule file, so `off` removes exactly what Kit copied and drift shows per file."""
+    out = []
+    for effect in effects:
+        if effect["format"] != "directory":
+            out.append(effect)
+            continue
+        kind, _, name = effect["source"].partition(":")
+        root = warehouse / "primitives" / f"{kind}s" / PurePosixPath(name)
+        if not root.is_dir() or not (root / "SKILL.md").is_file():
+            conflicts.append(
+                f"{effect['source']}: no skill directory with a SKILL.md in the warehouse"
+            )
+            continue
+        for path in sorted(p for p in root.rglob("*") if p.is_file() or p.is_symlink()):
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                conflicts.append(f"{effect['source']}: {rel} is a symlink; Kit copies files only")
+                continue
+            try:
+                text = path.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                conflicts.append(f"{effect['source']}: {rel} is not UTF-8 text; copy it by hand")
+                continue
+            out.append(
+                {
+                    **effect,
+                    "target": f"{effect['target']}{rel}",
+                    "format": "file",
+                    "key": effect["source"],
+                    "value": text,
+                }
+            )
+    return out
+
+
 def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
     result = Desired()
     for target in intent["loadouts"]:
@@ -275,12 +314,7 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
                         "value": block["text"],
                     }
                 )
-            for effect in effects:
-                if effect["format"] == "directory":
-                    result.conflicts.append(
-                        f"{effect['source']}: copying skill directories is not generated yet"
-                    )
-                    continue
+            for effect in _expand_directories(warehouse, effects, result.conflicts):
                 if "${plugin:" in _canonical(effect["value"]):
                     result.conflicts.append(
                         f"{effect.get('source', effect['target'])} ({harness}): needs the "
@@ -315,6 +349,53 @@ def desired_state(warehouse: Path, intent: dict[str, Any]) -> Desired:
     return result
 
 
+# Setup -------------------------------------------------------------------------------------------
+
+PLUGIN_REF = re.compile(r"\$\{plugin:([A-Za-z0-9._-]+)\}")
+
+
+def _installed_plugin_paths(home: Path) -> dict[str, str]:
+    """Plugin name -> install path, from Claude Code's installed_plugins.json."""
+    from kitctl.native import read_native
+
+    paths: dict[str, str] = {}
+    for item in read_native(home.expanduser().resolve(), home)["installed_plugins"]:
+        name = str(item.get("id", "")).split("@", 1)[0]
+        if item.get("path") and name not in paths:
+            paths[name] = str(item["path"])
+    return paths
+
+
+def setup_runs(
+    repo: Path, steps: list[dict[str, Any]], home: Path | None = None
+) -> list[dict[str, Any]]:
+    """Each setup step ready to run (`argv`), or why it is skipped (`skip`). Reads only.
+
+    A step's `when: file-exists:PATH` is checked in the project, and `${plugin:NAME}` becomes
+    the installed plugin's directory. Setup outputs are the tool's, never Kit-owned.
+    """
+    installed: dict[str, str] | None = None
+    runs: list[dict[str, Any]] = []
+    for step in steps:
+        when = str(step.get("when") or "")
+        if when.startswith("file-exists:") and not (repo / PurePosixPath(when[12:])).exists():
+            runs.append({"step": step, "argv": None, "skip": f"{when[12:]} not found"})
+            continue
+        argv: list[str] = []
+        skip: str | None = None
+        for part in step["run"]:
+            for name in PLUGIN_REF.findall(str(part)):
+                if installed is None:
+                    installed = _installed_plugin_paths(home or Path.home())
+                if name not in installed:
+                    skip = f"plugin {name} is not installed (Claude Code); install it, then re-run"
+                    break
+                part = str(part).replace(f"${{plugin:{name}}}", installed[name])
+            argv.append(str(part))
+        runs.append({"step": step, "argv": None if skip else argv, "skip": skip})
+    return runs
+
+
 # Files -------------------------------------------------------------------------------------------
 
 
@@ -332,6 +413,7 @@ class Doc:
         self.fmt = fmt
         self.path = repo / PurePosixPath(target)
         self.conflict: str | None = None
+        self.cleared = False
         if self.path.is_symlink() or any(
             p.is_symlink() for p in self.path.parents if p.is_relative_to(repo) and p != repo
         ):
@@ -371,7 +453,10 @@ class Doc:
         if self.fmt == "toml":
             return formats.toml_get(self.doc, key)
         if self.fmt == "file":
-            return MISSING if self.before is None else self.text.replace("\r\n", "\n")
+            # A whole file Kit just took back reads as absent, so an update re-inserts it.
+            if self.before is None or self.cleared:
+                return MISSING
+            return self.text.replace("\r\n", "\n")
         return formats.block_get(self.text, key)
 
     def insert(self, key: str, value: Any) -> tuple[list[str], dict[str, Any]]:
@@ -382,7 +467,8 @@ class Doc:
         if self.fmt == "toml":
             return formats.toml_set(self.doc, key, value), {}
         if self.fmt == "file":
-            self.text = value  # only reached when the file is absent: Kit never overwrites one
+            self.text = value  # only when absent or just taken back: Kit never overwrites one
+            self.cleared = False
             return [], {}
         self.text, separator = formats.block_insert(self.text, key, value)
         return [], {"separator": separator}
@@ -400,6 +486,7 @@ class Doc:
             formats.toml_delete(self.doc, entry["key"], created)
         elif self.fmt == "file":
             self.text = ""  # empty: deleted below because Kit created it
+            self.cleared = True
         else:
             self.text = formats.block_remove(self.text, entry["key"], entry.get("separator", ""))
 

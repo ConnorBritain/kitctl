@@ -55,8 +55,20 @@ kitctl status                                   # every owned entry should read 
 kitctl off gestalt-flow                         # the undo; restores the original bytes
 ```
 
-Kit writes project files only. User-scope (`~/`) targets, setup steps and skill
-directories are not generated; they stay gaps with remedies.
+Kit writes project files only; user-scope (`~/`) targets stay gaps with remedies.
+
+**Skills.** A skill primitive with a directory (`primitives/skills/<name>/` with a
+`SKILL.md`) is copied to `.claude/skills/<name>/` and `.agents/skills/<name>/`
+(`.cursor/skills/` for Cursor), one owned file per asset. A changed skill in the warehouse
+updates the copy; `off` removes it. An existing file Kit did not write, a symlink, or a
+non-UTF-8 asset is a conflict. External skills (`external: true`) are not copied.
+
+**Setup steps.** After `kitctl use` writes a loadout's config, it lists the loadout's
+`setup` steps and asks `Run N setup step(s)? [y/N]` (`--yes` runs them). A step whose
+`when: file-exists:PATH` is missing is skipped with the reason, and `${plugin:NAME}` becomes
+the installed Claude Code plugin's directory (skipped when the plugin is not installed).
+Steps run in the project with no shell; their outputs belong to the tool, so `off` leaves
+them. `kitctl use <loadout>` again re-runs them; `apply` only lists them.
 
 Every write takes `--dry-run`. Without `--yes`, nothing is written.
 
@@ -106,6 +118,5 @@ Cursor effect also comes with an `unverified` gap.
 - **Formatting.** JSON keeps indentation, key order, line endings and the final
   newline, but `json.dumps` expands compact arrays in files Kit edits. CRLF
   files stay CRLF.
-- **Not done yet.** `setup` steps are listed in the plan but not run. Skill
-  directory copies are not generated. User-scope (`~/`) targets are not
-  generated; brand-studio is entirely project-scoped.
+- **Not done yet.** User-scope (`~/`) targets are not generated; brand-studio is
+  entirely project-scoped.

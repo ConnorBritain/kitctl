@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Skill directories: a warehouse skill with a directory and a `SKILL.md` is copied into
+  `.claude/skills/`, `.agents/skills/` (and `.cursor/skills/`), one owned whole file per
+  asset; updates follow the warehouse and `off` removes them. Symlinks, non-UTF-8 assets
+  and files Kit did not write are conflicts. Fix: an owned whole file (a skill file or a
+  Cursor rule file) whose content changes is now updated instead of reported unmanaged.
+- Setup steps: `kitctl use` asks to run the loadout's `setup` steps after writing
+  (`--yes` runs them), skipping a step whose `when` file is missing or whose
+  `${plugin:NAME}` is not installed (resolved from Claude Code's installed_plugins.json).
+  Outputs stay the tool's. A failed step makes `use` exit 1.
 - `kitctl init [PATH]` creates a starter warehouse (default `KIT_WAREHOUSE` or `~/kits`):
   `loadouts/starter.yaml` (an instruction block and a `tool:git` check), empty
   `primitives/<kind>/` folders, a README, and `git init` unless `--no-git`. It refuses a

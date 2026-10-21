@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -285,7 +287,7 @@ def _print_plan(plan: engine.Plan, as_json: bool) -> None:
     for gap in plan.gaps:
         print(f"gap [{gap['severity']}] {gap['harness']} {gap['subject']}: {gap['reason']}")
     for step in plan.setup:
-        print(f"setup (not run; outputs are not Kit-owned): {' '.join(step['run'])}")
+        print(f"setup (`kitctl use` runs it; outputs are not Kit-owned): {' '.join(step['run'])}")
     for conflict in plan.conflicts:
         print(f"conflict: {conflict}", file=sys.stderr)
 
@@ -304,6 +306,31 @@ def _init(args: argparse.Namespace) -> int:
     hint = "" if root == default else f" (set KIT_WAREHOUSE={root} or pass --warehouse {root})"
     print(f"next: kitctl validate {root}, then `kitctl use starter` in a repo{hint}")
     return 0
+
+
+def _run_setup(args: argparse.Namespace, repo: Path, steps: list[dict[str, Any]]) -> int:
+    """Run a loadout's setup steps after its config is written, asking first like a write."""
+    runs = engine.setup_runs(repo, steps)
+    for run in runs:
+        if run["skip"]:
+            print(f"setup skipped ({run['skip']}): {shlex.join(map(str, run['step']['run']))}")
+    ready = [run for run in runs if run["argv"]]
+    if not ready or not _confirm(args, f"Run {len(ready)} setup step(s)?"):
+        if ready:
+            print("setup not run; `kitctl use` again (or --yes) runs it", file=sys.stderr)
+        return 0
+    failed = 0
+    for run in ready:
+        print(f"$ {shlex.join(run['argv'])}", flush=True)
+        try:
+            code = subprocess.run(run["argv"], cwd=repo, check=False).returncode
+        except OSError as error:
+            print(f"kitctl: setup could not start: {error}", file=sys.stderr)
+            code = 127
+        if code:
+            failed += 1
+            print(f"kitctl: setup step exited {code}", file=sys.stderr)
+    return 1 if failed else 0
 
 
 def _confirm(args: argparse.Namespace, question: str) -> bool:
@@ -390,6 +417,8 @@ def _project_command(args: argparse.Namespace) -> int:
         if recovered:
             print("recovered an interrupted apply")
         print(f"wrote {len(written)} files" if written else "already up to date")
+        if args.command == "use" and plan.setup:
+            return _run_setup(args, repo, plan.setup)
         return 0
     except engine.EngineError as error:
         print(f"kitctl: {error}", file=sys.stderr)

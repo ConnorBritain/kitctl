@@ -27,7 +27,7 @@ gaps.
 | Codex | `AGENTS.md` (existing) | appended managed block |
 
 Not written: the brand-builder edit hook ships with the plugin on both
-harnesses. The `voice-compile` setup step is listed in the plan but not run.
+harnesses. The `voice-compile` setup step runs after `kitctl use` when you confirm it.
 
 ## Expected gaps
 
