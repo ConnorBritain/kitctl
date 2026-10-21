@@ -15,13 +15,16 @@ def skill_warehouse(tmp_path: Path) -> Path:
     root = tmp_path / "kits"
     (root / "primitives" / "skills" / "hello" / "references").mkdir(parents=True)
     (root / "loadouts").mkdir()
-    (root / "primitives" / "skills" / "hello.yaml").write_text(
-        "schema_version: 2\nkind: skill\nname: hello\ndescription: Says hello.\n"
+    (root / "primitives" / "skills" / "hello.yaml").write_bytes(
+        b"schema_version: 2\nkind: skill\nname: hello\ndescription: Says hello.\n"
     )
-    (root / "primitives" / "skills" / "hello" / "SKILL.md").write_text(
-        "---\nname: hello\ndescription: Says hello.\n---\nSay hello.\n"
+    (root / "primitives" / "skills" / "hello" / "SKILL.md").write_bytes(
+        b"---\nname: hello\ndescription: Says hello.\n---\nSay hello.\n"
     )
-    (root / "primitives" / "skills" / "hello" / "references" / "notes.md").write_text("Notes.\n")
+    # A CRLF asset, as a Windows checkout of the warehouse would have it.
+    (root / "primitives" / "skills" / "hello" / "references" / "notes.md").write_bytes(
+        b"Notes.\r\n"
+    )
     (root / "loadouts" / "greet.yaml").write_text(
         "schema_version: 2\nname: greet\ndescription: Greets.\nextends: []\nskills: [skill:hello]\n"
     )
@@ -60,7 +63,7 @@ def test_a_skill_directory_is_copied_for_each_harness_and_off_removes_it(
     engine.apply_plan(p)
     for root in (".claude/skills/hello", ".agents/skills/hello"):
         assert (project / root / "SKILL.md").read_text().endswith("Say hello.\n")
-        assert (project / root / "references" / "notes.md").read_text() == "Notes.\n"
+        assert (project / root / "references" / "notes.md").read_bytes() == b"Notes.\n"
     assert engine.status(project, skill_warehouse)["entries"]
     assert all(e["state"] == "ok" for e in engine.status(project, skill_warehouse)["entries"])
     engine.apply_plan(plan(project, skill_warehouse, on=False))
@@ -72,8 +75,8 @@ def test_a_changed_skill_in_the_warehouse_updates_the_copy(
     project: Path, skill_warehouse: Path
 ) -> None:
     engine.apply_plan(plan(project, skill_warehouse))
-    (skill_warehouse / "primitives" / "skills" / "hello" / "SKILL.md").write_text(
-        "---\nname: hello\ndescription: Says hello.\n---\nSay hello twice.\n"
+    (skill_warehouse / "primitives" / "skills" / "hello" / "SKILL.md").write_bytes(
+        b"---\nname: hello\ndescription: Says hello.\n---\nSay hello twice.\n"
     )
     engine.apply_plan(plan(project, skill_warehouse))
     assert "twice" in (project / ".claude/skills/hello/SKILL.md").read_text()

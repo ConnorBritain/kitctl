@@ -284,7 +284,9 @@ def _expand_directories(
                 conflicts.append(f"{effect['source']}: {rel} is a symlink; Kit copies files only")
                 continue
             try:
-                text = path.read_bytes().decode("utf-8")
+                # Owned whole files are LF, like the content hash; a CRLF checkout of the
+                # warehouse must not read as drift on every apply.
+                text = path.read_bytes().decode("utf-8").replace("\r\n", "\n")
             except UnicodeDecodeError:
                 conflicts.append(f"{effect['source']}: {rel} is not UTF-8 text; copy it by hand")
                 continue
