@@ -64,4 +64,4 @@ def test_version(capsys: pytest.CaptureFixture) -> None:
     with pytest.raises(SystemExit) as result:
         main(["--version"])
     assert result.value.code == 0
-    assert capsys.readouterr().out == "kitctl 0.1.0\n"
+    assert capsys.readouterr().out == "kitctl 0.1.1\n"

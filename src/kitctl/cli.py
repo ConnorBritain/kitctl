@@ -21,6 +21,12 @@ from kitctl.validate import validate
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows pipes default to the ANSI code page, which cannot print the "—" and "→" in
+    # help, plans and instruction blocks.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors=getattr(stream, "errors", None))
     parser = argparse.ArgumentParser(
         prog="kitctl", description="Kit — inventory and manage agent tooling."
     )

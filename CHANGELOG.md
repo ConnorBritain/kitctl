@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-## 0.1.0 — not yet published (tag `v0.1.0`; see docs/publishing.md)
+## 0.1.1 — not yet published (tag `v0.1.1`; see docs/publishing.md)
+
+- Output is UTF-8 on every platform. On Windows, piped output (an agent, CI, `| more`)
+  used the ANSI code page, so `plan`, `apply` and `use` stopped with `'charmap' codec can't
+  encode character '→'` before showing the plan, and help printed `Kit � inventory`.
+- Docs: docs/publishing.md now says to verify TestPyPI from the downloaded wheel, and build the npm tarball
+  around the PyPI wheel.
+
+## 0.1.0 — 2026-10-22 (tag `v0.1.0`; see docs/publishing.md)
 
 Kit writes: loadouts apply to a project or to your home with a plan, a confirmation and a
 byte-for-byte undo.
