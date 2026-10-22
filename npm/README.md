@@ -1,6 +1,6 @@
 # Kit (`kitctl`)
 
-Kit manages the skills, MCP servers, hooks, plugins and instruction blocks your coding
+Kit manages the skills, agents, MCP servers, hooks, plugins and instruction blocks your coding
 agents (Claude Code, Codex and, documented but not yet verified, Cursor) load. You keep
 named **loadouts** in a warehouse (`~/kits` by default); kitctl writes each harness's own
 config for them in a project or in your home, with an ownership ledger so `kitctl off`
@@ -12,7 +12,9 @@ puts back exactly what was there.
 - check a loadout against what is actually installed (`doctor`, read-only);
 - apply loadouts to a project or to your home (`--user`): `use`, `off`, `apply`,
   `status`, `eject`, each showing its plan and asking before it writes;
-- copy warehouse skill folders and run a loadout's setup steps (after asking).
+- copy warehouse skill folders and worker agents, and run a loadout's setup steps (after
+  asking);
+- estimate each harness's always-on listing and hold it to a loadout `budget` (`doctor`).
 
 Kit never writes trust: approving hooks, MCP servers and projects stays with you.
 
@@ -63,6 +65,10 @@ name. It never fixes anything or starts an MCP server:
 ```sh
 uv run kitctl doctor --loadout brand-studio --root ~ --root path/to/repo
 ```
+
+It also estimates the always-on listing each harness carries for the loadout plus the
+roots' `kit.yaml` loadouts (instruction block, listed skills and agents, `ceil(chars / 4)`)
+and warns when it is over a loadout's `budget` (see [the model](docs/model.md#budget)).
 
 `use`, `off`, `plan`, `apply`, `status` and `eject` manage a project's native
 config through an ownership ledger. They show the plan and ask before writing
