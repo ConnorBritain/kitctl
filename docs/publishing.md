@@ -1,19 +1,43 @@
 # Publishing
 
-## 0.1.0 — prepared 2026-10-21, not yet published
+## 0.1.1 — prepared 2026-10-22, not yet published
 
-The owner publishes; nothing is uploaded from a cloud session. Same procedure as 0.0.1
-below, with the new tag:
+Fixes piped output on Windows (see CHANGELOG). Same procedure as 0.1.0, with two
+corrections learned while publishing 0.1.0:
 
 1. Merge the release PR to main and confirm CI is green on Linux and Windows.
-2. Tag the merge commit: `git tag v0.1.0 <sha> && git push origin v0.1.0`.
-3. `gh workflow run publish-python.yml --ref v0.1.0 -f target=testpypi`, then
-   `uvx --index https://test.pypi.org/simple/ --from kitctl==0.1.0 kitctl --version`.
-4. `gh workflow run publish-python.yml --ref v0.1.0 -f target=pypi`, then
-   `uvx --from kitctl==0.1.0 kitctl --version`.
-5. npm, from the same tag: the [npm](#npm) steps with `kitctl-0.1.0.tgz`.
+2. Tag the merge commit: `git tag v0.1.1 <sha> && git push origin v0.1.1`.
+3. `gh workflow run publish-python.yml --ref v0.1.1 -f target=testpypi`. Verify the
+   TestPyPI wheel itself, with every dependency from PyPI: download
+   `kitctl-0.1.1-py3-none-any.whl` from TestPyPI, check its sha256 against the index, then
+   `uvx --default-index https://pypi.org/simple --from <wheel> kitctl --version`.
+   (`uvx --index https://test.pypi.org/simple/ ...` fails: TestPyPI has `ruamel-yaml`, but
+   not at `>=0.18.10,<0.19`, and uv takes each package from the first index that has it.)
+4. `gh workflow run publish-python.yml --ref v0.1.1 -f target=pypi`, then
+   `uvx --from kitctl==0.1.1 kitctl --version`.
+5. npm, from the same tag: the [npm](#npm) steps with `kitctl-0.1.1.tgz`, in a clone made
+   with `git -c core.autocrlf=false clone --branch v0.1.1 ...`. After `prepare_npm.py`,
+   replace `npm/python/kitctl-0.1.1-py3-none-any.whl` with the wheel downloaded from PyPI
+   and rerun `npm test`, so npm ships the same bytes as PyPI. (A Windows build differs from
+   the Linux CI wheel at least in each zip entry's "made on" byte, and in line endings when
+   `core.autocrlf` is on.)
 6. Smoke test in a temporary HOME: `kitctl init`, `kitctl validate`,
    `kitctl use starter --repo <tmp repo> --yes`, `kitctl off starter --repo <tmp repo> --yes`.
+
+## 0.1.0 — verified release record, 2026-10-22
+
+- Tag v0.1.0, commit 42351245d127e61a12b430bed795ab63f4f9bd8d.
+- [TestPyPI](https://test.pypi.org/project/kitctl/0.1.0/) by
+  [run 39787975633](https://github.com/ConnorBritain/kitctl/actions/runs/39787975633);
+  [PyPI](https://pypi.org/project/kitctl/0.1.0/) by
+  [run 39788913708](https://github.com/ConnorBritain/kitctl/actions/runs/39788913708). Both
+  indexes hold the same files: wheel sha256
+  b5a5b96479092e952096243313ffa914584dd9e518c91884da22a2f359d3e377, sdist sha256
+  aa249b7df571d74fa0fd4f9ea2a12a658d79aaf6dd9259151003a440432c09bb.
+- [npm kitctl 0.1.0](https://www.npmjs.com/package/kitctl/v/0.1.0), integrity
+  sha512-KV9DqP8resEkYc6L0hmeZhqa0S8u0fnLxpVTqfu/Ej6J5PtB4PoftASqi8zIqeROFvwgSWmopMMmKQrLgrb9rg==;
+  it bundles the PyPI wheel byte for byte.
+- Smoke test in a temporary HOME passed; `off` left the repository byte-identical.
 
 # Publishing 0.0.1
 
