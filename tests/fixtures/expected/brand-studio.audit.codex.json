@@ -276,7 +276,7 @@
       "capability": "marketplace_fetch",
       "severity": "manual-step",
       "reason": "[marketplaces.<name>] source_type/source/ref in a trusted project config is read, but Codex fetches it only on `codex plugin marketplace upgrade <name>`",
-      "remedy": "after trusting the project: codex plugin marketplace upgrade brand-builder",
+      "remedy": "after trusting the project: codex plugin marketplace upgrade brand-builder; on an older Codex: codex plugin marketplace add ConnorBritain/brand-builder --ref aa4d814acb353934359f95526961babe07d2e0e6, then codex plugin add <plugin>@brand-builder",
       "fallback": null
     },
     {

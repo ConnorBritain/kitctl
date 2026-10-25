@@ -445,7 +445,9 @@ class Compiler:
             "marketplace_fetch",
             "manual-step",
             self.fact("marketplace_file").note,
-            remedy=f"after trusting the project: codex plugin marketplace upgrade {name}",
+            remedy=f"after trusting the project: codex plugin marketplace upgrade {name}; on "
+            f"an older Codex: codex plugin marketplace add {slug} --ref {ref}, then "
+            f"codex plugin add <plugin>@{name}",
         )
         if not tag and not self.fact("marketplace_sha_pin").supported:
             self.gap(
