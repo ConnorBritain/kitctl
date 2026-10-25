@@ -655,7 +655,8 @@ def parse_primitive(root: Path, ref: str) -> Primitive:
     # A marketplace is registered by its git URL, external or not. A non-mapping source is
     # already a "type" problem from _check_source.
     source = data.get("source", {})
-    if kind == "marketplace" and isinstance(source, dict) and not source.get("git"):
+    git = source.get("git") if isinstance(source, dict) else ""
+    if kind == "marketplace" and isinstance(source, dict) and not (isinstance(git, str) and git):
         problems.append(Problem(f"{where}.source.git", "required", "a marketplace needs a git URL"))
     for slot in _str_list(data.get("provides", []), f"{where}.provides", problems):
         if not SLOT_RE.match(slot):

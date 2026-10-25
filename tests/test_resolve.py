@@ -227,7 +227,10 @@ def test_credential_literal_is_rejected(cases: Path) -> None:
 
 # A marketplace is registered by its git URL; without one, `validate` used to die in resolve with
 # a traceback instead of naming the file, so a warehouse author never learned what to fix.
-@pytest.mark.parametrize("external", ["", "external: true\n"])
+@pytest.mark.parametrize(
+    "external",
+    ["", "external: true\n", f"source: {{git: true, sha: '{'0' * 40}'}}\n"],
+)
 def test_marketplace_without_a_git_source_is_a_problem(
     cases: Path, tmp_path: Path, external: str
 ) -> None:
