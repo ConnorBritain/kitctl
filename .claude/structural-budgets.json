@@ -1,0 +1,29 @@
+{
+  "_comment": "Per-repo exceptions for Connor's structural-sensor hook (~/.claude/hooks/structural-sensor.ps1); they win over the global budgets. These three modules were already over the 'standard' tier (400 lines) when the hook first met them. Each limit is the size measured on 2026-10-25 at 641142d plus a small margin for in-flight fixes, so the file cannot keep growing unnoticed. Splitting them is a separate refactor; lower a limit when a module shrinks.",
+  "exceptions": [
+    {
+      "pattern": "src/kitctl/model.py",
+      "max_file_loc": 940,
+      "max_methods": 39,
+      "max_imports": 13,
+      "max_classes": 5,
+      "reason": "Measured 889 lines, 37 functions, 11 imports, 5 classes: the whole warehouse schema and validation in one module. Pre-existing; split tracked as a follow-up refactor."
+    },
+    {
+      "pattern": "src/kitctl/resolve.py",
+      "max_file_loc": 1290,
+      "max_methods": 34,
+      "max_imports": 9,
+      "max_classes": 2,
+      "reason": "Measured 1233 lines, 32 functions, 7 imports, 2 classes: the per-harness compiler. Pre-existing; split tracked as a follow-up refactor."
+    },
+    {
+      "pattern": "src/kitctl/cli.py",
+      "max_file_loc": 560,
+      "max_methods": 17,
+      "max_imports": 18,
+      "max_classes": 1,
+      "reason": "Measured 551 lines, 15 functions, 16 imports, 0 classes: argparse wiring for every command. Pre-existing; split tracked as a follow-up refactor."
+    }
+  ]
+}
