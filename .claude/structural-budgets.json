@@ -1,0 +1,29 @@
+{
+  "_comment": "Per-repo exceptions for a structural-budget hook (structural-sensor) that some contributors run in Claude Code; they win over that hook's global budgets. These three modules were already over its 'standard' tier (400 lines) on 2026-10-25 at 641142d, so no fix could touch them. Each limit is the size measured then plus about 3% on lines and one more function or import. Lower a limit when a module shrinks; splitting them is a separate refactor that is not scheduled yet.",
+  "exceptions": [
+    {
+      "pattern": "src/kitctl/model.py",
+      "max_file_loc": 916,
+      "max_methods": 38,
+      "max_imports": 12,
+      "max_classes": 5,
+      "reason": "Measured 889 lines, 37 functions, 11 imports, 5 classes: the warehouse schema and validation in one module."
+    },
+    {
+      "pattern": "src/kitctl/resolve.py",
+      "max_file_loc": 1270,
+      "max_methods": 33,
+      "max_imports": 8,
+      "max_classes": 2,
+      "reason": "Measured 1233 lines, 32 functions, 7 imports, 2 classes: the per-harness compiler."
+    },
+    {
+      "pattern": "src/kitctl/cli.py",
+      "max_file_loc": 568,
+      "max_methods": 16,
+      "max_imports": 17,
+      "max_classes": 1,
+      "reason": "Measured 551 lines, 15 functions, 16 imports, 0 classes: argparse wiring for every command."
+    }
+  ]
+}

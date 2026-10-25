@@ -44,7 +44,9 @@ harnesses. The `voice-compile` setup step runs after `kitctl use` when you confi
     tagged.
   - Codex: Kit writes `[marketplaces.brand-builder]` pinned to the commit. That
     pin is verified with Codex 0.163.0. You then run
-    `codex plugin marketplace upgrade brand-builder` once to fetch it.
+    `codex plugin marketplace upgrade brand-builder` once to fetch it. Codex
+    0.144.1 ignores the project table; there, follow the plan's `marketplace add`
+    route (see harness-reference.md).
 - **Trust.** Codex loads the project's `.codex/` folder only for trusted
   projects, and runs plugin hooks only after the user reviews them. Kit never
   writes trust.

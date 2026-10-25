@@ -225,6 +225,35 @@ def test_credential_literal_is_rejected(cases: Path) -> None:
     assert "not-a-reference" not in str(error.value.problems)
 
 
+# A marketplace is registered by its git URL; without one, `validate` used to die in resolve with
+# a traceback instead of naming the file, so a warehouse author never learned what to fix.
+@pytest.mark.parametrize(
+    "external",
+    ["", "external: true\n", f"source: {{git: true, sha: '{'0' * 40}'}}\n"],
+)
+def test_marketplace_without_a_git_source_is_a_problem(
+    cases: Path, tmp_path: Path, external: str
+) -> None:
+    body = f"schema_version: 2\nkind: marketplace\nname: bare\ndescription: no source\n{external}"
+    (cases / "primitives/marketplaces").mkdir(exist_ok=True)
+    (cases / "primitives/marketplaces/bare.yaml").write_text(body)
+    with pytest.raises(ModelError) as error:
+        parse_primitive(cases, "marketplace:bare")
+    assert "required" in codes(error)
+    root = tmp_path / "wh"
+    for rel, text in {
+        "primitives/marketplaces/bare.yaml": body,
+        "primitives/plugins/p.yaml": "schema_version: 2\nkind: plugin\nname: p\n"
+        "description: p\nmarketplace: marketplace:bare\n",
+        "loadouts/l.yaml": "schema_version: 2\nname: l\ndescription: l\n"
+        "marketplaces: [marketplace:bare]\nplugins: [plugin:p]\n",
+    }.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    report = validate(root)
+    assert any(p["path"].endswith("bare.yaml.source.git") for p in report["problems"])
+
+
 def test_url_with_embedded_password_is_rejected(cases: Path) -> None:
     (cases / "primitives/mcp/remote.yaml").write_text(
         "schema_version: 2\nkind: mcp\nname: remote\ntransport: http\n"

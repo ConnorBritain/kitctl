@@ -102,7 +102,7 @@ uvx --from kitctl==0.0.1 kitctl --version
 
 ## npm
 
-Build and verify the exact tarball:
+Build and verify the exact tarball. `<version>` is the release, for example `0.1.1`:
 
 ```sh
 uv sync --locked
@@ -113,8 +113,8 @@ npm --prefix npm test
 cd npm
 npm pack --dry-run
 npm pack
-npm publish kitctl-0.0.1.tgz --access public
-npm view kitctl@0.0.1 version maintainers dist.integrity
+npm publish kitctl-<version>.tgz --access public
+npm view kitctl@<version> version maintainers dist.integrity
 ```
 
 Publishing requires [2FA or an eligible granular token](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/).

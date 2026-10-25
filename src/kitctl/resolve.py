@@ -422,13 +422,14 @@ class Compiler:
             return
         slug = _github_slug(url) or url
         ref = tag or sha
+        add_market = f"codex plugin marketplace add {slug} --ref {ref}"
         if not self.fact("marketplace_file").supported:
             self.gap(
                 primitive.identity,
                 "marketplace_file",
                 "manual-step",
                 self.fact("marketplace_file").note,
-                remedy=f"codex plugin marketplace add {slug} --ref {ref}",
+                remedy=add_market,
             )
             return
         self.add(
@@ -445,7 +446,9 @@ class Compiler:
             "marketplace_fetch",
             "manual-step",
             self.fact("marketplace_file").note,
-            remedy=f"after trusting the project: codex plugin marketplace upgrade {name}",
+            # Verified on Codex 0.163.0; 0.144.1 ignores the project table (harness-reference.md).
+            remedy=f"after trusting the project: codex plugin marketplace upgrade {name}; on "
+            f"an older Codex: {add_market}, then codex plugin add <plugin>@{name}",
         )
         if not tag and not self.fact("marketplace_sha_pin").supported:
             self.gap(

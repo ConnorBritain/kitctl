@@ -212,13 +212,31 @@ throwaway config. These facts supersede the "documented" entries above.
   therefore writes the table and reports the upgrade as a one-time manual step.
 - **verified**: `[plugins."brand-builder@brand-builder"] enabled = true` in a
   trusted project's config, after the marketplace upgrade, lists the plugin as
-  "installed, enabled 0.3.1". No separate `codex plugin add` is needed.
+  "installed, enabled 0.3.1". No separate `codex plugin add` is needed on 0.163.0
+  (0.144.1 needs one; see 2026-10-25 below).
 - **verified**: `[[skills.config]] name = "…" enabled = false` in a trusted
   project's config is **ignored**: `codex debug prompt-input` still lists the skill.
   The same entry in user config removes it. Single-skill disables need user scope, which
   `kitctl use <loadout> --user` writes as owned `[[skills.config]]` tables.
 - **verified**: `[mcp_servers.<id>]` in a trusted project's config is listed and
   enabled by `codex mcp list`.
+
+### Older CLIs on Connor's Windows machine (2026-10-25)
+
+First real apply (cairn, Gestalt's loadouts), with the project trusted in
+`~/.codex/config.toml`.
+
+- **verified, codex-cli 0.144.1**: the trusted project's `[marketplaces.<name>]` is
+  not read. `codex plugin marketplace upgrade <name>` fails with "marketplace `<name>`
+  is not configured as a Git marketplace", and `codex plugin marketplace list` shows
+  only user marketplaces. What worked: `codex plugin marketplace add <owner/repo>
+  --ref <sha>`, then `codex plugin add <plugin>@<marketplace>` (an enabled plugin was
+  not installed by itself). Plans name this route after the 0.163.0 one.
+- **verified, Claude Code 2.1.304 CLI**: `claude plugin marketplace list` and
+  `claude plugin list`, run inside the project, ignore its `extraKnownMarketplaces`.
+  `claude plugin install <plugin> --marketplace <owner/repo> --scope local` installed
+  the plugin for that project only (`.claude/settings.local.json`). Whether the
+  interactive session offers the project's marketplaces was not exercised.
 
 ### Codex CLI 0.163.0, corrections (2026-10-20)
 
