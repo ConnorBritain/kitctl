@@ -212,7 +212,8 @@ throwaway config. These facts supersede the "documented" entries above.
   therefore writes the table and reports the upgrade as a one-time manual step.
 - **verified**: `[plugins."brand-builder@brand-builder"] enabled = true` in a
   trusted project's config, after the marketplace upgrade, lists the plugin as
-  "installed, enabled 0.3.1". No separate `codex plugin add` is needed.
+  "installed, enabled 0.3.1". No separate `codex plugin add` is needed on 0.163.0
+  (0.144.1 needs one; see 2026-10-25 below).
 - **verified**: `[[skills.config]] name = "…" enabled = false` in a trusted
   project's config is **ignored**: `codex debug prompt-input` still lists the skill.
   The same entry in user config removes it. Single-skill disables need user scope, which

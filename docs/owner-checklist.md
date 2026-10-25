@@ -67,7 +67,9 @@ that ships inside a plugin.
 
 - [ ] Codex: trust the project when Codex prompts. Until then the project's
   `.codex/config.toml` is ignored.
-- [ ] Codex: `codex plugin marketplace upgrade brand-builder`, run once.
+- [ ] Codex: `codex plugin marketplace upgrade brand-builder`, run once. On a Codex
+  older than 0.163.0 (0.144.1 was seen) use the plan's other route: `codex plugin
+  marketplace add`, then `codex plugin add brand-builder@brand-builder`.
 - [ ] Codex: review and trust the brand-builder plugin hooks.
 - [ ] Claude: approve the project's MCP servers and plugin when prompted.
 - [ ] `kitctl status --repo <pilot>`: every owned entry should read `ok`.
